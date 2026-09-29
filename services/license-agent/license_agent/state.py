@@ -58,6 +58,10 @@ class LicenseState:
     def trusted_time_path(self) -> Path:
         return self.root / "trusted-time.json"
 
+    @property
+    def release_tombstone_path(self) -> Path:
+        return self.root / "released.json"
+
     def installation_id(self) -> str:
         if self.installation_path.exists():
             return json.loads(self.installation_path.read_text())["installation_id"]
@@ -107,6 +111,13 @@ class LicenseState:
     def save_lease(self, token: str) -> None:
         # Verify before storing so a corrupt/forged response never becomes trusted local state.
         payload = self.verify_lease(token)
+        if self.release_tombstone_path.exists():
+            try:
+                tombstone = json.loads(self.release_tombstone_path.read_text())
+                if tombstone.get("license_id") == payload.get("license_id"):
+                    raise ValueError("This installation has already released this license")
+            except json.JSONDecodeError:
+                raise ValueError("Local release state is invalid")
         self._atomic_text(self.lease_path, token)
         issued_at = parse_time(payload["issued_at"])
         self.update_trusted_time(issued_at)
@@ -118,6 +129,35 @@ class LicenseState:
 
     def clear_lease(self) -> None:
         self.lease_path.unlink(missing_ok=True)
+
+    def create_offline_release_code(self) -> str:
+        token = self.load_lease()
+        if not token:
+            raise ValueError("No license is installed")
+        payload = self.verify_lease(token)
+        if payload.get("license_type") != "offline":
+            raise ValueError("Installed license is not offline")
+        message = {
+            "v": 1,
+            "action": "offline_release",
+            "license_id": payload["license_id"],
+            "installation_id": self.installation_id(),
+            "nonce": b64url(os.urandom(24)),
+        }
+        envelope = {
+            "message": message,
+            "signature": self.sign(message),
+        }
+        code = b64url(canonical_json(envelope))
+        self._atomic_json(
+            self.release_tombstone_path,
+            {
+                "license_id": payload["license_id"],
+                "released_at": utcnow().isoformat(),
+            },
+        )
+        self.clear_lease()
+        return code
 
     def verify_lease(self, token: str) -> dict[str, Any]:
         settings = get_settings()
