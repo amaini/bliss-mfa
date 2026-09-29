@@ -29,6 +29,7 @@ from .schemas import (
     LicenseCreated,
     LicenseStatusRead,
     OfflineIssueRequest,
+    OfflineReleaseCode,
     ReleaseRequest,
 )
 from .security import require_admin
@@ -376,6 +377,48 @@ def change_license_status(
     event(db, license, "license.status_changed", license.installation_id, new_status)
     db.commit()
     return {"license_id": license.id, "status": license.status.value}
+
+
+@app.post(
+    "/v1/admin/offline/release",
+    dependencies=[Depends(require_admin)],
+)
+def release_offline_license(
+    payload: OfflineReleaseCode,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    try:
+        envelope = json.loads(b64url_decode(payload.release_code))
+        message = envelope["message"]
+        signature = str(envelope["signature"])
+        license_id = str(message["license_id"])
+        installation_id = str(message["installation_id"])
+    except (ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=400, detail="Invalid offline release code") from exc
+
+    license = db.get(License, license_id)
+    if not license or license.license_type != LicenseType.offline:
+        raise HTTPException(status_code=404, detail="Offline license not found")
+    if license.installation_id != installation_id:
+        raise HTTPException(status_code=409, detail="Release code does not match bound installation")
+    if message.get("action") != "offline_release":
+        raise HTTPException(status_code=400, detail="Invalid release action")
+
+    verify_installation_signature(license, signature, message)
+
+    old_installation = license.installation_id
+    license.installation_id = None
+    license.installation_public_key = None
+    license.last_seen_at = None
+    license.last_reported_seats = None
+    code = new_activation_code()
+    license.activation_code_hash = activation_hash(code)
+    event(db, license, "offline.released", old_installation)
+    db.commit()
+    return {
+        "status": "released",
+        "replacement_activation_code": code,
+    }
 
 
 @app.post(
