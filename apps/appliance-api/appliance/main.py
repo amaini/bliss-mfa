@@ -545,8 +545,12 @@ def license_heartbeat(
     _: Principal = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> dict:
+    audit_head = db.scalar(select(AuditEvent).order_by(AuditEvent.created_at.desc()).limit(1))
     try:
-        return license_agent().heartbeat(protected_seat_count(db))
+        return license_agent().heartbeat(
+            protected_seat_count(db),
+            audit_head.event_hash if audit_head else None,
+        )
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail="Heartbeat failed") from exc
 
