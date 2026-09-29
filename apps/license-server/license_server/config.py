@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     # PEM encoded Ed25519 private key. Generate once and keep only in Bliss infrastructure.
     signing_private_key_pem: str | None = None
+    signing_private_key_file: str | None = None
 
     online_lease_days: int = 14
     online_grace_days: int = 30
