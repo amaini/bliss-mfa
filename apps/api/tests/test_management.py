@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.auth import Principal, require_admin_principal, require_staff_principal
+from app.authorization import OrganizationAccess, require_org_manage, require_org_read
 from app.db import Base, get_db
 from app.dependencies import get_multiotp_adapter
 from app.main import app
@@ -41,6 +42,18 @@ test_principal = Principal(
 )
 app.dependency_overrides[require_staff_principal] = lambda: test_principal
 app.dependency_overrides[require_admin_principal] = lambda: test_principal
+app.dependency_overrides[require_org_read] = lambda: OrganizationAccess(
+    principal=test_principal,
+    organization_id="test",
+    role="super_admin",
+    is_staff=True,
+)
+app.dependency_overrides[require_org_manage] = lambda: OrganizationAccess(
+    principal=test_principal,
+    organization_id="test",
+    role="super_admin",
+    is_staff=True,
+)
 
 client = TestClient(app)
 
