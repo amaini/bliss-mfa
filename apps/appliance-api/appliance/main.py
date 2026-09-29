@@ -278,8 +278,7 @@ def create_user(
     if db.scalar(select(MfaUser).where(MfaUser.username == payload.username)):
         raise HTTPException(status_code=409, detail="User already exists")
 
-    if payload.protected_rdp:
-        ensure_seat(db)
+    ensure_seat(db)
 
     try:
         multiotp().create_user(payload.username)
@@ -290,7 +289,7 @@ def create_user(
         username=payload.username,
         display_name=payload.display_name,
         email=str(payload.email) if payload.email else None,
-        protected_rdp=payload.protected_rdp,
+        protected_rdp=True,
         engine_username=payload.username,
         status=UserStatus.pending,
     )
