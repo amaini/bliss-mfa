@@ -120,6 +120,13 @@ class LicenseAgentClient:
         response.raise_for_status()
         return response.json()
 
+
+
+    def offline_release_code(self) -> str:
+        response = httpx.post(f"{self.base_url}/v1/offline/release-code", timeout=10)
+        response.raise_for_status()
+        return str(response.json()["release_code"])
+
     def billing_portal(self) -> str:
         response = httpx.post(f"{self.base_url}/v1/billing/portal", timeout=20)
         response.raise_for_status()
