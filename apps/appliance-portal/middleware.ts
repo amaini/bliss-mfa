@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
-  if (path.startsWith("/login") || path.startsWith("/api/auth") || path.startsWith("/_next")) {
+  if (path.startsWith("/login") || path.startsWith("/setup") || path.startsWith("/api/auth") || path.startsWith("/_next")) {
     return NextResponse.next();
   }
 
