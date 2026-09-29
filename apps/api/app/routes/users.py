@@ -7,7 +7,14 @@ from ..db import get_db
 from ..dependencies import get_multiotp_adapter
 from ..models import MfaUser, Organization, UserStatus
 from ..multiotp import MultiOtpAdapter
-from ..schemas import (\n    MfaUserCreate,\n    MfaUserRead,\n    UserActionRead,\n    UserActionReason,\n    UserResyncRequest,\n)\nfrom ..auth import Principal, require_staff_principal
+from ..schemas import (
+    MfaUserCreate,
+    MfaUserRead,
+    UserActionRead,
+    UserActionReason,
+    UserResyncRequest,
+)
+from ..auth import Principal, require_staff_principal
 
 
 router = APIRouter(
