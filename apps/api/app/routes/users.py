@@ -14,7 +14,8 @@ from ..schemas import (
     UserActionReason,
     UserResyncRequest,
 )
-from ..auth import Principal, require_staff_principal
+from ..auth import Principal
+from ..authorization import OrganizationAccess, require_org_manage, require_org_read
 
 
 router = APIRouter(
@@ -33,7 +34,7 @@ def get_organization_or_404(db: Session, organization_id: str) -> Organization:
 @router.get(
     "",
     response_model=list[MfaUserRead],
-    dependencies=[Depends(require_staff_principal)],
+    dependencies=[Depends(require_org_read)],
 )
 def list_users(organization_id: str, db: Session = Depends(get_db)) -> list[MfaUser]:
     get_organization_or_404(db, organization_id)
@@ -54,7 +55,7 @@ def create_user(
     organization_id: str,
     payload: MfaUserCreate,
     request: Request,
-    principal: Principal = Depends(require_staff_principal),
+    access: OrganizationAccess = Depends(require_org_manage),
     db: Session = Depends(get_db),
     adapter: MultiOtpAdapter = Depends(get_multiotp_adapter),
 ) -> MfaUser:
@@ -100,7 +101,7 @@ def create_user(
     write_audit(
         db,
         organization_id=organization_id,
-        actor_id=principal.actor_id,
+        actor_id=access.actor_id,
         action="mfa.user.created",
         subject_type="mfa_user",
         subject_id=user.id,
@@ -118,7 +119,7 @@ def unlock_user(
     user_id: str,
     payload: UserActionReason,
     request: Request,
-    principal: Principal = Depends(require_staff_principal),
+    access: OrganizationAccess = Depends(require_org_manage),
     db: Session = Depends(get_db),
     adapter: MultiOtpAdapter = Depends(get_multiotp_adapter),
 ) -> UserActionRead:
@@ -138,7 +139,7 @@ def unlock_user(
     write_audit(
         db,
         organization_id=organization_id,
-        actor_id=principal.actor_id,
+        actor_id=access.actor_id,
         action="mfa.user.unlocked",
         subject_type="mfa_user",
         subject_id=user.id,
@@ -155,7 +156,7 @@ def disable_user(
     user_id: str,
     payload: UserActionReason,
     request: Request,
-    principal: Principal = Depends(require_staff_principal),
+    access: OrganizationAccess = Depends(require_org_manage),
     db: Session = Depends(get_db),
     adapter: MultiOtpAdapter = Depends(get_multiotp_adapter),
 ) -> UserActionRead:
@@ -173,7 +174,7 @@ def disable_user(
     write_audit(
         db,
         organization_id=organization_id,
-        actor_id=principal.actor_id,
+        actor_id=access.actor_id,
         action="mfa.user.disabled",
         subject_type="mfa_user",
         subject_id=user.id,
@@ -190,7 +191,7 @@ def enable_user(
     user_id: str,
     payload: UserActionReason,
     request: Request,
-    principal: Principal = Depends(require_staff_principal),
+    access: OrganizationAccess = Depends(require_org_manage),
     db: Session = Depends(get_db),
     adapter: MultiOtpAdapter = Depends(get_multiotp_adapter),
 ) -> UserActionRead:
@@ -208,7 +209,7 @@ def enable_user(
     write_audit(
         db,
         organization_id=organization_id,
-        actor_id=principal.actor_id,
+        actor_id=access.actor_id,
         action="mfa.user.enabled",
         subject_type="mfa_user",
         subject_id=user.id,
@@ -225,7 +226,7 @@ def resync_user(
     user_id: str,
     payload: UserResyncRequest,
     request: Request,
-    principal: Principal = Depends(require_staff_principal),
+    access: OrganizationAccess = Depends(require_org_manage),
     db: Session = Depends(get_db),
     adapter: MultiOtpAdapter = Depends(get_multiotp_adapter),
 ) -> UserActionRead:
@@ -242,7 +243,7 @@ def resync_user(
     write_audit(
         db,
         organization_id=organization_id,
-        actor_id=principal.actor_id,
+        actor_id=access.actor_id,
         action="mfa.user.resynced" if ok else "mfa.user.resync_failed",
         subject_type="mfa_user",
         subject_id=user.id,
@@ -262,7 +263,7 @@ def delete_user(
     user_id: str,
     reason: str,
     request: Request,
-    principal: Principal = Depends(require_staff_principal),
+    access: OrganizationAccess = Depends(require_org_manage),
     db: Session = Depends(get_db),
     adapter: MultiOtpAdapter = Depends(get_multiotp_adapter),
 ) -> None:
@@ -283,7 +284,7 @@ def delete_user(
     write_audit(
         db,
         organization_id=organization_id,
-        actor_id=principal.actor_id,
+        actor_id=access.actor_id,
         action="mfa.user.deleted",
         subject_type="mfa_user",
         subject_id=user_id_for_audit,
