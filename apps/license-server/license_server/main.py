@@ -156,10 +156,9 @@ def health() -> dict[str, str]:
 def create_license(payload: LicenseCreate, db: Session = Depends(get_db)) -> LicenseCreated:
     code = new_activation_code()
     license_type = LicenseType(payload.license_type)
-    offline_expires_at = None
+    offline_validity_days = None
     if license_type == LicenseType.offline:
-        days = payload.offline_days or settings.offline_default_days
-        offline_expires_at = utcnow() + timedelta(days=days)
+        offline_validity_days = payload.offline_days or settings.offline_default_days
 
     license = License(
         customer_name=payload.customer_name,
@@ -167,7 +166,7 @@ def create_license(payload: LicenseCreate, db: Session = Depends(get_db)) -> Lic
         license_type=license_type,
         max_rdp_users=payload.max_rdp_users,
         activation_code_hash=activation_hash(code),
-        offline_expires_at=offline_expires_at,
+        offline_validity_days=offline_validity_days,
     )
     db.add(license)
     db.flush()
@@ -380,8 +379,13 @@ def issue_offline(payload: OfflineIssueRequest, db: Session = Depends(get_db)) -
 
     if payload.max_rdp_users is not None:
         license.max_rdp_users = payload.max_rdp_users
-    if payload.validity_days is not None:
-        license.offline_expires_at = utcnow() + timedelta(days=payload.validity_days)
+    validity_days = (
+        payload.validity_days
+        or license.offline_validity_days
+        or settings.offline_default_days
+    )
+    license.offline_validity_days = validity_days
+    license.offline_expires_at = utcnow() + timedelta(days=validity_days)
 
     license.installation_id = installation_id
     license.installation_public_key = public_key
