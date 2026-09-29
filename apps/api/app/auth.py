@@ -4,7 +4,7 @@ import hmac
 from dataclasses import dataclass
 
 import jwt
-from fastapi import Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from jwt import PyJWKClient
 
 from .config import get_settings
@@ -105,10 +105,8 @@ def get_principal(
 
 
 def require_staff_principal(
-    principal: Principal = None,
+    principal: Principal = Depends(get_principal),
 ) -> Principal:
-    if principal is None:
-        raise RuntimeError("Principal dependency was not resolved")
 
     settings = get_settings()
     allowed = {
@@ -122,10 +120,8 @@ def require_staff_principal(
 
 
 def require_admin_principal(
-    principal: Principal = None,
+    principal: Principal = Depends(get_principal),
 ) -> Principal:
-    if principal is None:
-        raise RuntimeError("Principal dependency was not resolved")
 
     settings = get_settings()
     if settings.oidc_staff_admin_group not in principal.groups:
