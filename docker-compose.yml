@@ -40,6 +40,7 @@ services:
       STATE_DIR: /var/lib/bliss-mfa/license
       BLISS_SIGNING_PUBLIC_KEY_FILE: /run/bliss-keys/license-public.pem
       SOFTWARE_VERSION: 0.1.0-dev
+      AGENT_SHARED_TOKEN: local-license-agent-token
     volumes:
       - license_agent_data:/var/lib/bliss-mfa/license
       - ./.local/license-keys:/run/bliss-keys:ro
@@ -60,6 +61,7 @@ services:
       MULTIOTP_ADAPTER_URL: http://multiotp-mock:8090
       MULTIOTP_ADAPTER_TOKEN: local-adapter-token
       LICENSE_AGENT_URL: http://license-agent:8091
+      LICENSE_AGENT_TOKEN: local-license-agent-token
       LOCAL_PORTAL_URL: http://127.0.0.1:9443
     volumes:
       - appliance_data:/var/lib/bliss-mfa
