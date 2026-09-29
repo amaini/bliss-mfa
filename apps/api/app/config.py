@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+pysqlite:///./bliss_mfa.db"
     redis_url: str = "redis://localhost:6379/0"
 
+    multiotp_mode: str = "mock"
     multiotp_base_url: str | None = None
     multiotp_api_username: str | None = None
     multiotp_api_password: str | None = None
@@ -28,6 +29,7 @@ class Settings(BaseSettings):
     stripe_price_business_plus: str | None = None
 
     enrollment_ttl_minutes: int = Field(default=15, ge=5, le=120)
+    bliss_bootstrap_api_key: str | None = None
 
 
 @lru_cache
