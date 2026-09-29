@@ -5,13 +5,13 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models import Organization
 from ..schemas import OrganizationCreate, OrganizationRead
-from ..security import require_bootstrap_admin
+from ..auth import Principal, require_admin_principal, require_staff_principal
 
 
 router = APIRouter(
     prefix="/organizations",
     tags=["organizations"],
-    dependencies=[Depends(require_bootstrap_admin)],
+    dependencies=[Depends(require_staff_principal)],
 )
 
 
@@ -21,7 +21,11 @@ def list_organizations(db: Session = Depends(get_db)) -> list[Organization]:
 
 
 @router.post("", response_model=OrganizationRead, status_code=status.HTTP_201_CREATED)
-def create_organization(payload: OrganizationCreate, db: Session = Depends(get_db)) -> Organization:
+def create_organization(
+    payload: OrganizationCreate,
+    _: Principal = Depends(require_admin_principal),
+    db: Session = Depends(get_db),
+) -> Organization:
     if db.scalar(select(Organization).where(Organization.slug == payload.slug)):
         raise HTTPException(status_code=409, detail="Organization slug already exists")
 
