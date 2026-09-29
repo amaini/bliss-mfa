@@ -68,10 +68,17 @@ class MultiOtpClient:
 
 class LicenseAgentClient:
     def __init__(self) -> None:
-        self.base_url = get_settings().license_agent_url.rstrip("/")
+        settings = get_settings()
+        self.base_url = settings.license_agent_url.rstrip("/")
+        self.token = settings.license_agent_token
+
+    def _headers(self) -> dict[str, str]:
+        if not self.token:
+            raise RuntimeError("License agent token is not configured")
+        return {"authorization": f"Bearer {self.token}"}
 
     def status(self) -> dict:
-        response = httpx.get(f"{self.base_url}/v1/status", timeout=10)
+        response = httpx.get(f"{self.base_url}/v1/status", headers=self._headers(), timeout=10)
         response.raise_for_status()
         return response.json()
 
@@ -79,6 +86,7 @@ class LicenseAgentClient:
         response = httpx.post(
             f"{self.base_url}/v1/authorize/rdp-seat",
             json={"current_protected_rdp_users": current, "delta": delta},
+            headers=self._headers(),
             timeout=10,
         )
         response.raise_for_status()
