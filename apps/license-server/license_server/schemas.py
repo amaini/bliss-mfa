@@ -81,3 +81,7 @@ class LicenseStatusRead(BaseModel):
     last_seen_at: datetime | None
     last_reported_seats: int | None
     offline_expires_at: datetime | None
+
+
+class OfflineReleaseCode(BaseModel):
+    release_code: str = Field(min_length=20, max_length=10000)
