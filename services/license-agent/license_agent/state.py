@@ -62,6 +62,10 @@ class LicenseState:
     def release_tombstone_path(self) -> Path:
         return self.root / "released.json"
 
+    @property
+    def seat_state_path(self) -> Path:
+        return self.root / "rdp-seats.json"
+
     def installation_id(self) -> str:
         if self.installation_path.exists():
             return json.loads(self.installation_path.read_text())["installation_id"]
@@ -223,6 +227,70 @@ class LicenseState:
             "state": effective,
             "trusted_now": now.isoformat(),
         }
+
+
+    def seat_id(self, username: str) -> str:
+        normalized = username.strip().lower()
+        return hashlib.sha256(normalized.encode()).hexdigest()
+
+    def seat_ids(self) -> set[str]:
+        if not self.seat_state_path.exists():
+            return set()
+        try:
+            data = json.loads(self.seat_state_path.read_text())
+            return {str(value) for value in data.get("seats", [])}
+        except (ValueError, json.JSONDecodeError):
+            return set()
+
+    def seat_count(self) -> int:
+        return len(self.seat_ids())
+
+    def has_seat(self, username: str) -> bool:
+        return self.seat_id(username) in self.seat_ids()
+
+    def reserve_seat(self, username: str) -> dict[str, Any]:
+        license = self.effective_status()
+        state = str(license.get("state", "unlicensed"))
+        maximum = int(license.get("max_rdp_users") or 0)
+        seats = self.seat_ids()
+        seat = self.seat_id(username)
+
+        if seat in seats:
+            return {
+                "allowed": True,
+                "seat_count": len(seats),
+                "max_rdp_users": maximum,
+                "already_reserved": True,
+            }
+        if state not in {"active", "offline_grace"}:
+            return {
+                "allowed": False,
+                "seat_count": len(seats),
+                "max_rdp_users": maximum,
+                "reason": f"License state {state} does not allow a new RDP seat",
+            }
+        if len(seats) >= maximum:
+            return {
+                "allowed": False,
+                "seat_count": len(seats),
+                "max_rdp_users": maximum,
+                "reason": f"RDP seat limit reached ({len(seats)}/{maximum})",
+            }
+
+        seats.add(seat)
+        self._atomic_json(self.seat_state_path, {"seats": sorted(seats)})
+        return {
+            "allowed": True,
+            "seat_count": len(seats),
+            "max_rdp_users": maximum,
+            "already_reserved": False,
+        }
+
+    def release_seat(self, username: str) -> int:
+        seats = self.seat_ids()
+        seats.discard(self.seat_id(username))
+        self._atomic_json(self.seat_state_path, {"seats": sorted(seats)})
+        return len(seats)
 
     def update_trusted_time(self, server_time: datetime) -> None:
         current = self._read_trusted_time()
