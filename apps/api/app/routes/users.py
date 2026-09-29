@@ -14,7 +14,6 @@ from ..schemas import (
     UserActionReason,
     UserResyncRequest,
 )
-from ..auth import Principal
 from ..authorization import OrganizationAccess, require_org_manage, require_org_read
 
 
