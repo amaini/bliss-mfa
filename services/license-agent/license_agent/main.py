@@ -42,7 +42,7 @@ def activate_online(payload: OnlineActivationRequest) -> dict:
 @app.post("/v1/heartbeat")
 def heartbeat(payload: HeartbeatInput) -> dict:
     try:
-        return client.heartbeat(payload.protected_rdp_users)
+        return client.heartbeat(payload.protected_rdp_users, payload.audit_head_hash)
     except HTTPError as exc:
         # A failed heartbeat does not erase the last valid signed lease. The
         # effective status endpoint will move through offline_grace/restricted.
