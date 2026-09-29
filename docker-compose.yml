@@ -1,63 +1,86 @@
+# Development appliance stack.
+#
+# Before first run:
+#   python scripts/generate-license-keys.py
+#
+# Production must replace development secrets, use the real multiOTP adapter,
+# use TLS and keep the Bliss private signing key only on Bliss infrastructure.
+
 services:
-  postgres:
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_DB: bliss_mfa
-      POSTGRES_USER: bliss_mfa
-      POSTGRES_PASSWORD: local-development-only
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U bliss_mfa -d bliss_mfa"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  redis:
-    image: redis:8-alpine
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  api:
+  license-server:
     build:
-      context: ./apps/api
+      context: ./apps/license-server
     environment:
       APP_ENV: development
-      DATABASE_URL: postgresql+psycopg://bliss_mfa:local-development-only@postgres:5432/bliss_mfa
-      REDIS_URL: redis://redis:6379/0
-      PORTAL_BASE_URL: http://localhost:3000
-      ALLOWED_ORIGINS: http://localhost:3000
-      MULTIOTP_MODE: mock
-      BLISS_BOOTSTRAP_API_KEY: local-development-key
+      DATABASE_URL: sqlite+pysqlite:////var/lib/bliss-license/licenses.db
+      ADMIN_API_KEY: local-license-admin
+      SIGNING_PRIVATE_KEY_FILE: /run/bliss-keys/license-private.pem
+      ONLINE_LEASE_DAYS: 14
+      ONLINE_GRACE_DAYS: 30
+      OFFLINE_DEFAULT_DAYS: 365
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
-      STRIPE_PRICE_STARTER: ${STRIPE_PRICE_STARTER:-}
-      STRIPE_PRICE_BUSINESS: ${STRIPE_PRICE_BUSINESS:-}
-      STRIPE_PRICE_BUSINESS_PLUS: ${STRIPE_PRICE_BUSINESS_PLUS:-}
+      STRIPE_RETURN_URL: http://127.0.0.1:9443/license
+    volumes:
+      - license_server_data:/var/lib/bliss-license
+      - ./.local/license-keys:/run/bliss-keys:ro
     ports:
-      - "8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - "127.0.0.1:8080:8080"
 
-  portal:
+  multiotp-mock:
     build:
-      context: ./apps/portal
-      args:
-        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
-    ports:
-      - "3000:3000"
+      context: ./services/multiotp-mock
+    expose:
+      - "8090"
+
+  license-agent:
+    build:
+      context: ./services/license-agent
+    environment:
+      LICENSE_SERVER_URL: http://license-server:8080
+      STATE_DIR: /var/lib/bliss-mfa/license
+      BLISS_SIGNING_PUBLIC_KEY_FILE: /run/bliss-keys/license-public.pem
+      SOFTWARE_VERSION: 0.1.0-dev
+    volumes:
+      - license_agent_data:/var/lib/bliss-mfa/license
+      - ./.local/license-keys:/run/bliss-keys:ro
+    expose:
+      - "8091"
     depends_on:
-      - api
+      - license-server
+
+  appliance-api:
+    build:
+      context: ./apps/appliance-api
+    environment:
+      APP_ENV: development
+      DATABASE_URL: sqlite+pysqlite:////var/lib/bliss-mfa/appliance.db
+      JWT_SECRET: local-development-jwt-change-me
+      SETUP_TOKEN: local-first-owner-setup
+      COMPANY_NAME: Development Office
+      MULTIOTP_ADAPTER_URL: http://multiotp-mock:8090
+      MULTIOTP_ADAPTER_TOKEN: local-adapter-token
+      LICENSE_AGENT_URL: http://license-agent:8091
+      LOCAL_PORTAL_URL: http://127.0.0.1:9443
+    volumes:
+      - appliance_data:/var/lib/bliss-mfa
+    expose:
+      - "8000"
+    depends_on:
+      - license-agent
+      - multiotp-mock
+
+  appliance-portal:
+    build:
+      context: ./apps/appliance-portal
+    environment:
+      APPLIANCE_API_URL: http://appliance-api:8000
+      PORTAL_PUBLIC_URL: http://127.0.0.1:9443
+    ports:
+      - "127.0.0.1:9443:3000"
+    depends_on:
+      - appliance-api
 
 volumes:
-  postgres_data:
-  redis_data:
+  license_server_data:
+  license_agent_data:
+  appliance_data:
