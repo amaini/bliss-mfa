@@ -52,3 +52,23 @@ class EnrollmentVerify(BaseModel):
 class HealthRead(BaseModel):
     status: str
     service: str
+
+class EnrollmentStartRead(BaseModel):
+    enrollment_token: str
+    provisioning_uri: str
+    expires_at: datetime
+
+
+class EnrollmentVerifyRequest(BaseModel):
+    enrollment_token: str = Field(min_length=32, max_length=512)
+    otp: str = Field(pattern=r"^\d{6,10}$")
+
+
+class EnrollmentVerifyRead(BaseModel):
+    verified: bool
+    user_id: str
+    device_id: str
+
+
+class RevokeDeviceRequest(BaseModel):
+    reason: str = Field(min_length=3, max_length=1000)
