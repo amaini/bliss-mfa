@@ -90,6 +90,11 @@ def event_digest(
     previous_hash: str | None,
     created_at: datetime,
 ) -> str:
+    normalized_created_at = created_at
+    if normalized_created_at.tzinfo is None:
+        normalized_created_at = normalized_created_at.replace(tzinfo=timezone.utc)
+    normalized_created_at = normalized_created_at.astimezone(timezone.utc)
+
     payload = json.dumps(
         {
             "actor_id": actor_id,
@@ -99,7 +104,7 @@ def event_digest(
             "reason": reason,
             "success": success,
             "previous_hash": previous_hash,
-            "created_at": created_at.isoformat(),
+            "created_at": normalized_created_at.isoformat(),
         },
         sort_keys=True,
         separators=(",", ":"),
