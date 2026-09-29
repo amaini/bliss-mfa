@@ -40,20 +40,6 @@ class MfaUserRead(BaseModel):
 
 
 class EnrollmentStartRead(BaseModel):
-    enrollment_id: str
-    enrollment_token: str
-    expires_at: datetime
-
-
-class EnrollmentVerify(BaseModel):
-    otp: str = Field(pattern=r"^\d{6,10}$")
-
-
-class HealthRead(BaseModel):
-    status: str
-    service: str
-
-class EnrollmentStartRead(BaseModel):
     enrollment_token: str
     provisioning_uri: str
     expires_at: datetime
@@ -72,3 +58,8 @@ class EnrollmentVerifyRead(BaseModel):
 
 class RevokeDeviceRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=1000)
+
+
+class HealthRead(BaseModel):
+    status: str
+    service: str
