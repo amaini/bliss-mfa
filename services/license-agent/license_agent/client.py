@@ -32,7 +32,7 @@ class LicenseServerClient:
         self.state.save_lease(data["signed_lease"])
         return data
 
-    def heartbeat(self, protected_rdp_users: int) -> dict:
+    def heartbeat(self, protected_rdp_users: int, audit_head_hash: str | None = None) -> dict:
         installation_id = self.state.installation_id()
         with self._client() as client:
             challenge = client.post(
@@ -46,6 +46,8 @@ class LicenseServerClient:
                 "nonce": nonce,
                 "protected_rdp_users": protected_rdp_users,
                 "software_version": self.settings.software_version,
+                "machine_fingerprint": self.state.machine_fingerprint(),
+                "audit_head_hash": audit_head_hash,
             }
             response = client.post(
                 "/v1/heartbeat",
