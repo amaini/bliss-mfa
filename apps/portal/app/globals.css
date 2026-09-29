@@ -104,3 +104,121 @@ h2 { margin: 2px 0 0; font-size: 19px; }
   .stats, .actionGrid { grid-template-columns: 1fr; }
   .notice { align-items: flex-start; flex-direction: column; }
 }
+
+
+.publicPage {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 36px 24px 72px;
+}
+
+.publicPage.narrow { max-width: 760px; }
+
+.publicNav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 64px;
+}
+
+.publicNav a {
+  color: var(--brand);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.hero {
+  max-width: 780px;
+  margin-bottom: 34px;
+}
+
+.hero h1 {
+  font-size: clamp(36px, 6vw, 64px);
+  line-height: 1.02;
+  margin: 10px 0 18px;
+}
+
+.hero p:last-child {
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.65;
+}
+
+.plans {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.plan {
+  text-align: left;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px;
+  display: grid;
+  gap: 10px;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.plan.selected {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgba(38, 62, 145, .08);
+}
+
+.plan span { font-weight: 800; color: var(--brand); }
+.plan strong { font-size: 21px; }
+.plan small { color: var(--muted); line-height: 1.5; }
+
+.checkoutForm,
+.onboardingCard {
+  display: grid;
+  gap: 16px;
+}
+
+.checkoutForm > div,
+.onboardingCard form {
+  display: grid;
+  gap: 7px;
+}
+
+label {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: white;
+  padding: 11px 12px;
+  color: var(--ink);
+  outline: none;
+}
+
+input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(38, 62, 145, .08);
+}
+
+.formError {
+  color: #a12a2a;
+  font-size: 13px;
+  margin: 8px 0 0;
+}
+
+.successMessage {
+  background: #edf8ef;
+  border: 1px solid #cde8d2;
+  padding: 12px 14px;
+  border-radius: 9px;
+  color: #2d6336;
+}
+
+@media (max-width: 760px) {
+  .plans { grid-template-columns: 1fr; }
+  .publicNav { margin-bottom: 38px; }
+}
