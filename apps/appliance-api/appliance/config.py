@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     multiotp_adapter_token: str | None = None
     license_agent_url: str = "http://license-agent:8091"
     local_portal_url: str = "http://127.0.0.1:9443"
+    heartbeat_interval_hours: int = 24
 
 @lru_cache
 def get_settings() -> Settings:
