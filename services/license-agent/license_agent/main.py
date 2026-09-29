@@ -104,3 +104,11 @@ def release() -> dict:
         return client.release()
     except HTTPError as exc:
         raise HTTPException(status_code=502, detail="License release failed") from exc
+
+
+@app.post("/v1/offline/release-code")
+def offline_release_code() -> dict[str, str]:
+    try:
+        return {"release_code": state.create_offline_release_code()}
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
