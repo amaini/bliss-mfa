@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..auth import require_staff_principal
+from ..authorization import require_org_read
 from ..db import get_db
 from ..models import AuditEvent, Organization
 from ..schemas import AuditEventRead
@@ -11,7 +11,7 @@ from ..schemas import AuditEventRead
 router = APIRouter(
     prefix="/organizations/{organization_id}/audit",
     tags=["audit"],
-    dependencies=[Depends(require_staff_principal)],
+    dependencies=[Depends(require_org_read)],
 )
 
 
