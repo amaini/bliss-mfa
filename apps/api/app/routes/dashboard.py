@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..auth import require_staff_principal
+from ..authorization import require_org_read
 from ..db import get_db
 from ..models import (
     DeviceStatus,
@@ -19,7 +19,7 @@ from ..schemas import OrganizationStatsRead
 router = APIRouter(
     prefix="/organizations/{organization_id}/stats",
     tags=["dashboard"],
-    dependencies=[Depends(require_staff_principal)],
+    dependencies=[Depends(require_org_read)],
 )
 
 
