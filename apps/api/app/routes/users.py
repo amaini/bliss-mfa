@@ -8,7 +8,7 @@ from ..dependencies import get_multiotp_adapter
 from ..models import MfaUser, Organization, UserStatus
 from ..multiotp import MultiOtpAdapter
 from ..schemas import MfaUserCreate, MfaUserRead
-from ..security import require_bootstrap_admin
+from ..auth import Principal, require_staff_principal
 
 
 router = APIRouter(
@@ -27,7 +27,7 @@ def get_organization_or_404(db: Session, organization_id: str) -> Organization:
 @router.get(
     "",
     response_model=list[MfaUserRead],
-    dependencies=[Depends(require_bootstrap_admin)],
+    dependencies=[Depends(require_staff_principal)],
 )
 def list_users(organization_id: str, db: Session = Depends(get_db)) -> list[MfaUser]:
     get_organization_or_404(db, organization_id)
@@ -48,7 +48,7 @@ def create_user(
     organization_id: str,
     payload: MfaUserCreate,
     request: Request,
-    actor_id: str = Depends(require_bootstrap_admin),
+    principal: Principal = Depends(require_staff_principal),
     db: Session = Depends(get_db),
     adapter: MultiOtpAdapter = Depends(get_multiotp_adapter),
 ) -> MfaUser:
@@ -94,7 +94,7 @@ def create_user(
     write_audit(
         db,
         organization_id=organization_id,
-        actor_id=actor_id,
+        actor_id=principal.actor_id,
         action="mfa.user.created",
         subject_type="mfa_user",
         subject_id=user.id,
