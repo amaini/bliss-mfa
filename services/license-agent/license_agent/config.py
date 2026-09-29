@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     bliss_signing_public_key_file: str | None = None
     software_version: str = "0.1.0"
     heartbeat_timeout_seconds: int = 15
+    agent_shared_token: str | None = None
 
 @lru_cache
 def get_settings() -> Settings:
