@@ -181,6 +181,29 @@ def create_license(payload: LicenseCreate, db: Session = Depends(get_db)) -> Lic
 
 
 @app.get(
+    "/v1/admin/licenses",
+    response_model=list[LicenseStatusRead],
+    dependencies=[Depends(require_admin)],
+)
+def list_licenses(db: Session = Depends(get_db)) -> list[LicenseStatusRead]:
+    licenses = list(db.scalars(select(License).order_by(License.customer_name)))
+    return [
+        LicenseStatusRead(
+            id=item.id,
+            customer_name=item.customer_name,
+            license_type=item.license_type.value,
+            status=item.status.value,
+            max_rdp_users=item.max_rdp_users,
+            installation_id=item.installation_id,
+            last_seen_at=item.last_seen_at,
+            last_reported_seats=item.last_reported_seats,
+            offline_expires_at=item.offline_expires_at,
+        )
+        for item in licenses
+    ]
+
+
+@app.get(
     "/v1/admin/licenses/{license_id}",
     response_model=LicenseStatusRead,
     dependencies=[Depends(require_admin)],
@@ -332,6 +355,27 @@ def release_installation(payload: ReleaseRequest, db: Session = Depends(get_db))
     event(db, license, "installation.released", old_installation)
     db.commit()
     return {"status": "released", "replacement_activation_code": code}
+
+
+@app.post(
+    "/v1/admin/licenses/{license_id}/status/{new_status}",
+    dependencies=[Depends(require_admin)],
+)
+def change_license_status(
+    license_id: str,
+    new_status: str,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    license = db.get(License, license_id)
+    if not license:
+        raise HTTPException(status_code=404, detail="License not found")
+    try:
+        license.status = LicenseStatus(new_status)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Invalid license status") from exc
+    event(db, license, "license.status_changed", license.installation_id, new_status)
+    db.commit()
+    return {"license_id": license.id, "status": license.status.value}
 
 
 @app.post(
