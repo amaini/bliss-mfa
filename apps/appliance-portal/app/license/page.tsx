@@ -21,6 +21,7 @@ export default function LicensePage() {
   const [license, setLicense] = useState<License | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [offlineCode, setOfflineCode] = useState<string | null>(null);
+  const [releaseCode, setReleaseCode] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -109,6 +110,22 @@ export default function LicensePage() {
     }
   }
 
+
+  async function releaseOffline() {
+    if (!window.confirm("Deactivate this offline license on this appliance?")) return;
+    try {
+      const result = await api<{ release_code: string }>("/license/offline/release-code", {
+        method: "POST",
+        body: "{}",
+      });
+      setReleaseCode(result.release_code);
+      setMessage("This appliance has locally released the offline license. Send the release code to Bliss to transfer it.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Offline release failed");
+    }
+  }
+
   async function release() {
     if (!window.confirm("Deactivate this license so it can be transferred to another appliance?")) return;
     try {
@@ -140,7 +157,8 @@ export default function LicensePage() {
           <p className="eyebrow">Subscription</p>
           <button className="primary" onClick={manageSubscription}>Manage subscription / buy more users</button>
           {license?.license_type === "online" ? <button className="secondary" onClick={heartbeat}>Validate license now</button> : null}
-          {license?.license_id ? <button className="danger" onClick={release}>Deactivate / transfer license</button> : null}
+          {license?.license_type === "online" && license?.license_id ? <button className="danger" onClick={release}>Deactivate / transfer license</button> : null}
+          {license?.license_type === "offline" && license?.license_id ? <button className="danger" onClick={releaseOffline}>Deactivate offline license</button> : null}
           <p className="muted">Credit-card details are handled on the hosted billing portal, not by this appliance.</p>
         </article>
       </section>
@@ -174,6 +192,17 @@ export default function LicensePage() {
             </label>
             <button className="primary" type="submit">Apply offline license</button>
           </form>
+        </section>
+      ) : null}
+
+      {releaseCode ? (
+        <section className="card stack" style={{ marginTop: 16 }}>
+          <div>
+            <p className="eyebrow">Offline release</p>
+            <h2>Send this release code to Bliss IT Solutions</h2>
+            <p className="muted">Bliss verifies the code against this appliance key before the license can be transferred.</p>
+          </div>
+          <code className="codeBox">{releaseCode}</code>
         </section>
       ) : null}
     </Shell>
