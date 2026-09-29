@@ -100,7 +100,6 @@ def start_heartbeat_scheduler() -> None:
         hours=settings.heartbeat_interval_hours,
         id="bliss-license-heartbeat",
         replace_existing=True,
-        next_run_time=None,
     )
     if not scheduler.running:
         scheduler.start()
