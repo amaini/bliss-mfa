@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from httpx import HTTPError
 
 from .client import LicenseServerClient
@@ -13,10 +13,15 @@ from .schemas import (
     SeatAuthorizationRequest,
     SeatAuthorizationResponse,
 )
+from .security import require_local_auth
 from .state import LicenseState
 
 
-app = FastAPI(title="Bliss Secure MFA License Agent", version="0.1.0")
+app = FastAPI(
+    title="Bliss Secure MFA License Agent",
+    version="0.1.0",
+    dependencies=[Depends(require_local_auth)],
+)
 state = LicenseState()
 client = LicenseServerClient(state)
 
