@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import base64
 import json
+import hashlib
 import os
+import platform
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -91,6 +93,16 @@ class LicenseState:
 
     def sign(self, payload: dict[str, Any]) -> str:
         return b64url(self.device_key().sign(canonical_json(payload)))
+
+    def machine_fingerprint(self) -> str:
+        parts = [platform.node(), platform.system(), platform.machine()]
+        machine_id = Path("/etc/machine-id")
+        if machine_id.exists():
+            try:
+                parts.append(machine_id.read_text().strip())
+            except OSError:
+                pass
+        return hashlib.sha256("|".join(parts).encode()).hexdigest()
 
     def save_lease(self, token: str) -> None:
         # Verify before storing so a corrupt/forged response never becomes trusted local state.
