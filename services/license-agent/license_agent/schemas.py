@@ -23,6 +23,7 @@ class SeatAuthorizationResponse(BaseModel):
 
 class HeartbeatInput(BaseModel):
     protected_rdp_users: int = Field(ge=0)
+    audit_head_hash: str | None = Field(default=None, max_length=128)
 
 class BillingLinkResponse(BaseModel):
     url: str
