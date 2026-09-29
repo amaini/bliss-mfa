@@ -1,71 +1,77 @@
 # Security Model
 
-## Non-negotiable controls
+## Authentication-data boundary
 
-- MFA seeds must remain owned by multiOTP.
-- QR provisioning payloads must be short-lived and must not be logged.
-- No TOTP seed, provisioning URI, PIN, recovery code, password, or Stripe secret may appear in application logs.
-- All tenant-scoped reads and writes must enforce tenant membership server-side.
-- Technician permissions must be explicit and auditable.
-- The adapter must use an allow-list of operations. It must never accept a raw shell command from the portal or API.
-- Destructive operations require a reason and generate immutable audit events.
-- Customer payment state must not directly disable authentication.
+multiOTP remains the owner of OTP/TOTP secret material. The central Bliss
+license service does not require customer usernames, OTP seeds, QR codes,
+passwords or RADIUS requests.
 
-## Roles
+Provisioning URIs are returned only to the local management workflow and must
+not be logged or centrally transmitted.
 
-### Bliss Super Admin
-Full tenant and platform administration.
+## Local management authentication
 
-### Bliss Technician
-Operational MFA lifecycle actions based on granted permissions.
+The appliance uses local roles: owner, admin, operator and readonly.
 
-### Customer Administrator
-Manages users/devices only inside their organization.
+Initial setup is one-time and requires `SETUP_TOKEN`. Passwords are stored
+with Argon2. Browser sessions use short-lived local JWTs carried in an HttpOnly
+portal cookie.
 
-### End User
-Limited self-service enrollment, device replacement, and recovery flows.
+Production appliances must use a unique random JWT secret and TLS.
 
-## Initial permissions
+## License cryptography
 
-```text
-organizations.read
-organizations.manage
-users.read
-users.create
-users.update
-users.disable
-users.delete
-mfa.enroll
-mfa.replace
-mfa.revoke
-mfa.unlock
-mfa.resync
-mfa.recovery
-audit.read
-billing.read
-billing.manage
-platform.admin
-```
+Each appliance generates an Ed25519 device keypair.
 
-## Sensitive workflows
+- the private key stays on the appliance
+- the public key is registered with Bliss
+- heartbeat and release requests are signed by the appliance key
+- Bliss leases are signed by a separate Bliss signing key
+- appliances contain only the Bliss public verification key
 
-### Device replacement
+Changing a signed seat count, installation binding or expiry invalidates the
+lease signature.
 
-1. Identity verification occurs outside or inside the workflow according to policy.
-2. Existing device/token is revoked.
-3. A single-use enrollment transaction is created.
-4. Provisioning material is presented only to the intended user.
-5. User proves possession by submitting a valid OTP.
-6. Enrollment is marked complete.
-7. Audit event records actor, tenant, subject, action, reason, source IP, and outcome.
+## Trusted time
 
-## Billing safety
+The license agent persists the newest signed Bliss issue time it has observed.
+The effective licensing clock cannot move earlier than that trusted value,
+reducing simple clock-rollback bypasses.
 
-Allowed effects of payment problems:
-- warn customer
-- alert Bliss
-- prevent plan expansion
-- prevent new enrollments after policy-defined grace period
+## Installation-clone signals
 
-Disallowed automatic effect:
-- immediate shutdown of existing MFA authentication
+The cryptographic device key is the primary installation identity. Heartbeats
+also carry a hashed secondary machine fingerprint. A fingerprint change is
+recorded as an anomaly rather than automatically treated as proof of abuse.
+
+A later hardened build can store the installation key in TPM 2.0.
+
+## Seat enforcement
+
+The appliance API asks the local license agent before a protected RDP user is
+created or re-enabled. The browser UI is not the security boundary.
+
+The multiOTP adapter exposes only approved operations and never arbitrary shell
+commands.
+
+## Audit integrity
+
+Local privileged operations form a hash chain. Every event stores its previous
+event hash and its own digest. The appliance API exposes a local integrity
+verification endpoint.
+
+The current audit-head hash is included in licensing heartbeat metadata so Bliss
+can checkpoint integrity without receiving the underlying customer events.
+
+## Payment safety
+
+License state may restrict management actions but is not wired directly into
+RADIUS authentication. A failed card or temporary license-server outage must
+not instantly lock an office out of an existing working MFA deployment.
+
+## Air-gapped limitation
+
+A truly air-gapped installation cannot be continuously policed from Bliss.
+Offline entitlements therefore have a signed fixed expiry and should be sold as
+prepaid terms. This is an explicit tradeoff rather than pretending a heartbeat
+exists where no network path exists.
