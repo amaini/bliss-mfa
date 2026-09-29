@@ -92,3 +92,47 @@ class OnboardingCompleteRead(BaseModel):
     organization_id: str
     organization_slug: str
     seat_limit: int
+
+
+class UserActionReason(BaseModel):
+    reason: str = Field(min_length=3, max_length=1000)
+
+
+class UserResyncRequest(BaseModel):
+    otp1: str = Field(pattern=r"^\d{4,16}$")
+    otp2: str = Field(pattern=r"^\d{4,16}$")
+    reason: str = Field(min_length=3, max_length=1000)
+
+
+class UserActionRead(BaseModel):
+    ok: bool
+    status: str
+
+
+class AuditEventRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    organization_id: str
+    actor_type: str
+    actor_id: str | None
+    action: str
+    subject_type: str
+    subject_id: str | None
+    reason: str | None
+    source_ip: str | None
+    success: bool
+    correlation_id: str
+    created_at: datetime
+
+
+class OrganizationStatsRead(BaseModel):
+    organization_id: str
+    total_users: int
+    active_users: int
+    pending_users: int
+    disabled_users: int
+    locked_users: int
+    active_devices: int
+    pending_enrollments: int
+    seat_limit: int
