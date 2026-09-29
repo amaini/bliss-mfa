@@ -1,97 +1,106 @@
 # Bliss Secure MFA Architecture
 
-## Goal
+## Product boundary
 
-Build a multi-tenant MSP management plane around multiOTP without turning the multiOTP codebase into the billing, customer, or technician portal.
-
-## Trust boundaries
-
-1. **Public website** — marketing and Stripe Checkout entry point.
-2. **Portal** — authenticated customer/technician UI.
-3. **Management API** — authorization, tenancy, audit, billing entitlement.
-4. **multiOTP adapter** — narrow set of approved MFA lifecycle operations.
-5. **multiOTP / RADIUS** — authentication engine and MFA secret owner.
-6. **Stripe** — billing source of truth.
-
-## High-level topology
+Bliss Secure MFA is appliance-first. Every office gets an independent local
+management plane. Authentication does not depend on Bliss cloud availability.
 
 ```text
-blissitek.ca/managed-mfa
-          |
-          v
-   Stripe Checkout
-          |
-          v
-   Stripe Webhooks ----------------------+
-                                         |
-                                         v
-Internet ---> mfa.blissitek.ca ---> Management API ---> PostgreSQL
-                                      |
-                                      v
-                                multiOTP Adapter
-                                      |
-                                      v
-                                  multiOTP
-                                      |
-                                      v
-                                  FreeRADIUS
-                                      |
-                               RDP / VPN / Apps
+Office administrator
+       |
+       v
+127.0.0.1 / office LAN portal
+       |
+       v
+Appliance API
+  |         |
+  |         +------> License Agent
+  |                    |
+  v                    | licensing / billing only
+multiOTP Adapter       v
+  |              license.blissitek.ca
+  v
+multiOTP
+  |
+FreeRADIUS
+  |
+Windows RDP / VPN
 ```
+
+## Customer-local data
+
+The appliance keeps locally:
+- local administrator accounts and roles
+- RDP/MFA user records
+- enrollment workflow
+- audit history
+- multiOTP token state
+- OTP secrets and provisioning material
+- RADIUS traffic and authentication state
+
+The central Bliss service stores only commercial and installation metadata:
+license ID/type, installation ID/public key, RDP seat entitlement, subscription
+state, last heartbeat, protected-seat count, software version and integrity
+checkpoints.
+
+## Billable RDP seat
+
+One distinct Windows/RDP account enabled for Bliss Secure MFA protection equals
+one Bliss RDP seat. Concurrent or reconnected sessions do not create extra
+Bliss seats.
+
+Seat-consuming states are pending enrollment, active and locked. Disabled,
+revoked and deleted records do not consume a seat.
+
+Microsoft RDS/CAL licensing remains separate.
+
+## Online licensing
+
+1. Bliss creates an online license and one-time activation code.
+2. Appliance generates an Ed25519 installation keypair.
+3. Activation binds the license to the installation ID/public key.
+4. Bliss returns a signed lease.
+5. Heartbeat uses a random challenge signed by the installation key.
+6. The signed request contains seat count, software version and integrity signals.
+7. Bliss returns a fresh signed lease.
+
+The current code defaults to a 14-day lease and 30-day grace; both are
+configuration values.
+
+## Offline licensing
+
+Offline licenses are explicitly issued as offline licenses.
+
+1. Customer enters the offline activation code locally.
+2. Appliance creates an installation code.
+3. Bliss processes that code in the licensing control plane.
+4. Bliss returns a signed activation response.
+5. Appliance verifies the signature and installation binding.
+6. The fixed-term entitlement works without Internet access.
+
+Offline licensing is intended for annual/prepaid terms because ongoing online
+validation is impossible in an air-gapped environment.
+
+## Transfer
+
+An online license normally requires a signed release from its bound appliance
+before it can activate elsewhere. Bliss can force-release a failed appliance.
+
+An offline installation cannot be remotely invalidated while disconnected.
+Its old signed entitlement therefore remains technically valid until its signed
+expiry if somebody retains the old appliance.
+
+## Expiration policy
+
+Licensing gates management rather than the RADIUS authentication path.
+Restricted licensing prevents commercial management actions such as creating
+or re-enabling protected users, but existing MFA authentication is not
+automatically stopped solely because billing failed.
 
 ## Repository boundary
 
-`amaini/multiotp_Bliss`
-- multiOTP engine
-- RADIUS integration
-- minimal engine-level patches
-- upstream tracking
+`amaini/multiotp_Bliss` remains the MFA/RADIUS engine.
 
-`amaini/bliss-mfa`
-- portal
-- management API
-- tenancy/RBAC
-- billing
-- audit
-- multiOTP adapter
-- deployment configuration
-
-## Core rule
-
-The Bliss API exposes business operations, never arbitrary multiOTP commands.
-
-Examples:
-
-- `create_user`
-- `begin_totp_enrollment`
-- `verify_enrollment`
-- `replace_device`
-- `revoke_device`
-- `disable_user`
-- `enable_user`
-- `unlock_user`
-- `generate_recovery_codes`
-- `get_user_status`
-
-## Data ownership
-
-### multiOTP owns
-- TOTP/HOTP seeds
-- token state
-- authentication counters
-- OTP validation state
-- RADIUS authentication data
-
-### Bliss database owns
-- organizations
-- portal identities
-- tenant membership
-- RBAC
-- device metadata
-- enrollment workflow state
-- audit events
-- Stripe identifiers
-- subscription entitlement
-- commercial plan limits
-
-The Bliss database must not persist raw MFA seed material.
+`amaini/bliss-mfa` owns the appliance UI/API, local administrator RBAC,
+licensing agent, seat enforcement, audit, central license server, billing
+integration and the allow-listed multiOTP adapter.
