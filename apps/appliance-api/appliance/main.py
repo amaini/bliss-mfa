@@ -1,0 +1,584 @@
+from __future__ import annotations
+
+import hmac
+
+import httpx
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from .audit import write_audit
+from .clients import LicenseAgentClient, MultiOtpClient
+from .config import get_settings
+from .db import Base, engine, get_db
+from .models import AdminRole, AuditEvent, LocalAdmin, MfaUser, UserStatus
+from .schemas import (
+    AdminCreate,
+    AdminRead,
+    AuditRead,
+    BootstrapRequest,
+    EnrollmentRead,
+    LicenseActivate,
+    LoginRequest,
+    OfflineApply,
+    ReasonRequest,
+    ResyncRequest,
+    TokenRead,
+    UserCreate,
+    UserRead,
+    VerifyRequest,
+)
+from .security import (
+    Principal,
+    current_principal,
+    hash_password,
+    issue_token,
+    require_admin,
+    require_operator,
+    require_owner,
+    verify_password,
+)
+
+
+settings = get_settings()
+app = FastAPI(title="Bliss Secure MFA Appliance API", version="0.1.0")
+
+
+@app.on_event("startup")
+def startup() -> None:
+    Base.metadata.create_all(bind=engine)
+
+
+def multiotp() -> MultiOtpClient:
+    return MultiOtpClient()
+
+
+def license_agent() -> LicenseAgentClient:
+    return LicenseAgentClient()
+
+
+def protected_seat_count(db: Session) -> int:
+    return int(
+        db.scalar(
+            select(func.count())
+            .select_from(MfaUser)
+            .where(
+                MfaUser.protected_rdp.is_(True),
+                MfaUser.status.in_(
+                    [UserStatus.pending, UserStatus.active, UserStatus.locked]
+                ),
+            )
+        )
+        or 0
+    )
+
+
+def user_or_404(db: Session, user_id: str) -> MfaUser:
+    user = db.get(MfaUser, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+def ensure_seat(db: Session, delta: int = 1) -> None:
+    try:
+        result = license_agent().authorize_seat(protected_seat_count(db), delta)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=503, detail="License agent unavailable") from exc
+    if not result["allowed"]:
+        raise HTTPException(status_code=403, detail=result.get("reason") or "License denied")
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.post("/v1/auth/bootstrap", response_model=TokenRead, status_code=201)
+def bootstrap(payload: BootstrapRequest, db: Session = Depends(get_db)) -> TokenRead:
+    if db.scalar(select(func.count()).select_from(LocalAdmin)):
+        raise HTTPException(status_code=409, detail="Appliance is already initialized")
+    if not settings.setup_token or not hmac.compare_digest(payload.setup_token, settings.setup_token):
+        raise HTTPException(status_code=401, detail="Invalid setup token")
+
+    admin = LocalAdmin(
+        email=str(payload.email).lower(),
+        display_name=payload.display_name,
+        password_hash=hash_password(payload.password),
+        role=AdminRole.owner,
+    )
+    db.add(admin)
+    db.flush()
+    write_audit(
+        db,
+        actor_id=admin.id,
+        action="admin.bootstrap_created",
+        subject_type="local_admin",
+        subject_id=admin.id,
+    )
+    db.commit()
+    return TokenRead(access_token=issue_token(admin))
+
+
+@app.post("/v1/auth/login", response_model=TokenRead)
+def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenRead:
+    admin = db.scalar(
+        select(LocalAdmin).where(LocalAdmin.email == str(payload.email).lower())
+    )
+    if not admin or admin.disabled or not verify_password(admin.password_hash, payload.password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    return TokenRead(access_token=issue_token(admin))
+
+
+@app.get("/v1/me")
+def me(principal: Principal = Depends(current_principal)) -> dict[str, str]:
+    return {
+        "id": principal.id,
+        "email": principal.email,
+        "role": principal.role.value,
+        "company_name": settings.company_name,
+    }
+
+
+@app.get("/v1/admins", response_model=list[AdminRead])
+def list_admins(
+    _: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> list[LocalAdmin]:
+    return list(db.scalars(select(LocalAdmin).order_by(LocalAdmin.email)))
+
+
+@app.post("/v1/admins", response_model=AdminRead, status_code=201)
+def create_admin(
+    payload: AdminCreate,
+    request: Request,
+    principal: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> LocalAdmin:
+    email = str(payload.email).lower()
+    if db.scalar(select(LocalAdmin).where(LocalAdmin.email == email)):
+        raise HTTPException(status_code=409, detail="Administrator already exists")
+    if payload.role == AdminRole.owner.value and principal.role != AdminRole.owner:
+        raise HTTPException(status_code=403, detail="Only the owner can create another owner")
+
+    admin = LocalAdmin(
+        email=email,
+        display_name=payload.display_name,
+        password_hash=hash_password(payload.password),
+        role=AdminRole(payload.role),
+    )
+    db.add(admin)
+    db.flush()
+    write_audit(
+        db,
+        actor_id=principal.id,
+        action="admin.created",
+        subject_type="local_admin",
+        subject_id=admin.id,
+        reason=f"role={admin.role.value}",
+        source_ip=request.client.host if request.client else None,
+    )
+    db.commit()
+    db.refresh(admin)
+    return admin
+
+
+@app.delete("/v1/admins/{admin_id}", status_code=204)
+def delete_admin(
+    admin_id: str,
+    request: Request,
+    reason: str,
+    principal: Principal = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> None:
+    admin = db.get(LocalAdmin, admin_id)
+    if not admin:
+        raise HTTPException(status_code=404, detail="Administrator not found")
+    if admin.id == principal.id:
+        raise HTTPException(status_code=409, detail="Owner cannot delete the active account")
+
+    if admin.role == AdminRole.owner:
+        owners = int(
+            db.scalar(
+                select(func.count())
+                .select_from(LocalAdmin)
+                .where(LocalAdmin.role == AdminRole.owner, LocalAdmin.disabled.is_(False))
+            )
+            or 0
+        )
+        if owners <= 1:
+            raise HTTPException(status_code=409, detail="The final owner cannot be removed")
+
+    db.delete(admin)
+    write_audit(
+        db,
+        actor_id=principal.id,
+        action="admin.deleted",
+        subject_type="local_admin",
+        subject_id=admin_id,
+        reason=reason,
+        source_ip=request.client.host if request.client else None,
+    )
+    db.commit()
+
+
+@app.get("/v1/users", response_model=list[UserRead])
+def list_users(
+    _: Principal = Depends(current_principal),
+    db: Session = Depends(get_db),
+) -> list[MfaUser]:
+    return list(db.scalars(select(MfaUser).order_by(MfaUser.username)))
+
+
+@app.post("/v1/users", response_model=UserRead, status_code=201)
+def create_user(
+    payload: UserCreate,
+    request: Request,
+    principal: Principal = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> MfaUser:
+    if db.scalar(select(MfaUser).where(MfaUser.username == payload.username)):
+        raise HTTPException(status_code=409, detail="User already exists")
+
+    if payload.protected_rdp:
+        ensure_seat(db)
+
+    try:
+        multiotp().create_user(payload.username)
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail="Unable to create user in MFA engine") from exc
+
+    user = MfaUser(
+        username=payload.username,
+        display_name=payload.display_name,
+        email=str(payload.email) if payload.email else None,
+        protected_rdp=payload.protected_rdp,
+        engine_username=payload.username,
+        status=UserStatus.pending,
+    )
+    db.add(user)
+    db.flush()
+    write_audit(
+        db,
+        actor_id=principal.id,
+        action="mfa.user.created",
+        subject_type="mfa_user",
+        subject_id=user.id,
+        source_ip=request.client.host if request.client else None,
+    )
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@app.post("/v1/users/{user_id}/enrollment", response_model=EnrollmentRead)
+def enrollment(
+    user_id: str,
+    principal: Principal = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> EnrollmentRead:
+    user = user_or_404(db, user_id)
+    if user.status != UserStatus.pending:
+        raise HTTPException(status_code=409, detail="Only pending users may be enrolled")
+    try:
+        uri = multiotp().provisioning_uri(user.engine_username)
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail="Unable to obtain provisioning data") from exc
+    return EnrollmentRead(provisioning_uri=uri)
+
+
+@app.post("/v1/users/{user_id}/verify", response_model=UserRead)
+def verify_enrollment(
+    user_id: str,
+    payload: VerifyRequest,
+    request: Request,
+    principal: Principal = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> MfaUser:
+    user = user_or_404(db, user_id)
+    if user.status != UserStatus.pending:
+        raise HTTPException(status_code=409, detail="User is not pending enrollment")
+    try:
+        ok = multiotp().verify(user.engine_username, payload.otp)
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail="MFA engine verification failed") from exc
+    if not ok:
+        write_audit(
+            db,
+            actor_id=principal.id,
+            action="mfa.enrollment.verify_failed",
+            subject_type="mfa_user",
+            subject_id=user.id,
+            success=False,
+            source_ip=request.client.host if request.client else None,
+        )
+        db.commit()
+        raise HTTPException(status_code=400, detail="Invalid one-time code")
+
+    user.status = UserStatus.active
+    write_audit(
+        db,
+        actor_id=principal.id,
+        action="mfa.enrollment.verified",
+        subject_type="mfa_user",
+        subject_id=user.id,
+        source_ip=request.client.host if request.client else None,
+    )
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def reason_command(
+    *,
+    user_id: str,
+    command: str,
+    action: str,
+    new_status: UserStatus | None,
+    payload: ReasonRequest,
+    request: Request,
+    principal: Principal,
+    db: Session,
+    requires_seat: bool = False,
+) -> MfaUser:
+    user = user_or_404(db, user_id)
+    if requires_seat and user.protected_rdp and user.status in {UserStatus.disabled, UserStatus.revoked}:
+        ensure_seat(db)
+    try:
+        ok = multiotp().command(user.engine_username, command)
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail="MFA engine command failed") from exc
+    if not ok:
+        raise HTTPException(status_code=409, detail="MFA engine rejected the command")
+    if new_status:
+        user.status = new_status
+    write_audit(
+        db,
+        actor_id=principal.id,
+        action=action,
+        subject_type="mfa_user",
+        subject_id=user.id,
+        reason=payload.reason,
+        source_ip=request.client.host if request.client else None,
+    )
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@app.post("/v1/users/{user_id}/disable", response_model=UserRead)
+def disable_user(
+    user_id: str,
+    payload: ReasonRequest,
+    request: Request,
+    principal: Principal = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> MfaUser:
+    return reason_command(
+        user_id=user_id, command="disable", action="mfa.user.disabled",
+        new_status=UserStatus.disabled, payload=payload, request=request,
+        principal=principal, db=db,
+    )
+
+
+@app.post("/v1/users/{user_id}/enable", response_model=UserRead)
+def enable_user(
+    user_id: str,
+    payload: ReasonRequest,
+    request: Request,
+    principal: Principal = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> MfaUser:
+    return reason_command(
+        user_id=user_id, command="enable", action="mfa.user.enabled",
+        new_status=UserStatus.active, payload=payload, request=request,
+        principal=principal, db=db, requires_seat=True,
+    )
+
+
+@app.post("/v1/users/{user_id}/unlock", response_model=UserRead)
+def unlock_user(
+    user_id: str,
+    payload: ReasonRequest,
+    request: Request,
+    principal: Principal = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> MfaUser:
+    return reason_command(
+        user_id=user_id, command="unlock", action="mfa.user.unlocked",
+        new_status=UserStatus.active, payload=payload, request=request,
+        principal=principal, db=db,
+    )
+
+
+@app.post("/v1/users/{user_id}/revoke", response_model=UserRead)
+def revoke_user(
+    user_id: str,
+    payload: ReasonRequest,
+    request: Request,
+    principal: Principal = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> MfaUser:
+    return reason_command(
+        user_id=user_id, command="revoke", action="mfa.user.revoked",
+        new_status=UserStatus.revoked, payload=payload, request=request,
+        principal=principal, db=db,
+    )
+
+
+@app.post("/v1/users/{user_id}/resync", response_model=UserRead)
+def resync_user(
+    user_id: str,
+    payload: ResyncRequest,
+    request: Request,
+    principal: Principal = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> MfaUser:
+    user = user_or_404(db, user_id)
+    try:
+        ok = multiotp().command(
+            user.engine_username,
+            "resync",
+            {"otp1": payload.otp1, "otp2": payload.otp2},
+        )
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail="MFA engine resync failed") from exc
+    write_audit(
+        db,
+        actor_id=principal.id,
+        action="mfa.user.resynced" if ok else "mfa.user.resync_failed",
+        subject_type="mfa_user",
+        subject_id=user.id,
+        reason=payload.reason,
+        success=ok,
+        source_ip=request.client.host if request.client else None,
+    )
+    db.commit()
+    if not ok:
+        raise HTTPException(status_code=400, detail="Token resync failed")
+    return user
+
+
+@app.delete("/v1/users/{user_id}", status_code=204)
+def delete_user(
+    user_id: str,
+    reason: str,
+    request: Request,
+    principal: Principal = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> None:
+    user = user_or_404(db, user_id)
+    try:
+        ok = multiotp().delete_user(user.engine_username)
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail="MFA engine delete failed") from exc
+    if not ok:
+        raise HTTPException(status_code=409, detail="MFA engine rejected deletion")
+    db.delete(user)
+    write_audit(
+        db,
+        actor_id=principal.id,
+        action="mfa.user.deleted",
+        subject_type="mfa_user",
+        subject_id=user_id,
+        reason=reason,
+        source_ip=request.client.host if request.client else None,
+    )
+    db.commit()
+
+
+@app.get("/v1/audit", response_model=list[AuditRead])
+def audit(
+    limit: int = 200,
+    _: Principal = Depends(current_principal),
+    db: Session = Depends(get_db),
+) -> list[AuditEvent]:
+    limit = max(1, min(limit, 500))
+    return list(
+        db.scalars(select(AuditEvent).order_by(AuditEvent.created_at.desc()).limit(limit))
+    )
+
+
+@app.get("/v1/license/status")
+def license_status(_: Principal = Depends(current_principal)) -> dict:
+    try:
+        return license_agent().status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=503, detail="License agent unavailable") from exc
+
+
+@app.post("/v1/license/activate/online")
+def license_activate_online(
+    payload: LicenseActivate,
+    _: Principal = Depends(require_owner),
+) -> dict:
+    try:
+        return license_agent().activate_online(payload.activation_code)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="Online activation failed") from exc
+
+
+@app.post("/v1/license/offline/request")
+def license_offline_request(
+    payload: LicenseActivate,
+    _: Principal = Depends(require_owner),
+) -> dict:
+    try:
+        return license_agent().offline_request(payload.activation_code)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="Offline request generation failed") from exc
+
+
+@app.post("/v1/license/offline/apply")
+def license_offline_apply(
+    payload: OfflineApply,
+    _: Principal = Depends(require_owner),
+) -> dict:
+    try:
+        return license_agent().offline_apply(payload.activation_response)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="Offline activation failed") from exc
+
+
+@app.post("/v1/license/heartbeat")
+def license_heartbeat(
+    _: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        return license_agent().heartbeat(protected_seat_count(db))
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="Heartbeat failed") from exc
+
+
+@app.post("/v1/license/billing")
+def license_billing(_: Principal = Depends(require_admin)) -> dict[str, str]:
+    try:
+        return {"url": license_agent().billing_portal()}
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="Billing portal unavailable") from exc
+
+
+@app.post("/v1/license/release")
+def license_release(_: Principal = Depends(require_owner)) -> dict:
+    try:
+        return license_agent().release()
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="License release failed") from exc
+
+
+@app.get("/v1/stats")
+def stats(
+    _: Principal = Depends(current_principal),
+    db: Session = Depends(get_db),
+) -> dict:
+    users = list(db.scalars(select(MfaUser)))
+    return {
+        "company_name": settings.company_name,
+        "protected_rdp_users": protected_seat_count(db),
+        "total_users": len(users),
+        "active_users": sum(user.status == UserStatus.active for user in users),
+        "pending_users": sum(user.status == UserStatus.pending for user in users),
+        "disabled_users": sum(user.status == UserStatus.disabled for user in users),
+        "locked_users": sum(user.status == UserStatus.locked for user in users),
+    }
