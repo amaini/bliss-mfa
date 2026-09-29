@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import stripe
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..billing import (
@@ -12,11 +13,30 @@ from ..billing import (
 )
 from ..config import get_settings
 from ..db import get_db
-from ..models import PendingSignup, SignupStatus
-from ..schemas import CheckoutCreateRead, CheckoutCreateRequest
+from ..models import (
+    Organization,
+    PendingSignup,
+    SignupStatus,
+    StripeWebhookEvent,
+    Subscription,
+    SubscriptionStatus,
+)
+from ..schemas import (
+    CheckoutCreateRead,
+    CheckoutCreateRequest,
+    OnboardingCompleteRead,
+    OnboardingCompleteRequest,
+    OnboardingStatusRead,
+)
 
 
 router = APIRouter(prefix="/billing", tags=["billing"])
+
+PLAN_SEATS = {
+    "starter": 10,
+    "business": 50,
+    "business_plus": 100,
+}
 
 
 @router.post(
@@ -72,7 +92,7 @@ def create_checkout(
             cancel_url=cancel_url,
             allow_promotion_codes=True,
         )
-    except stripe.StripeError as exc:
+    except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=502, detail="Unable to create checkout session") from exc
 
@@ -85,6 +105,76 @@ def create_checkout(
     return CheckoutCreateRead(
         checkout_url=session.url,
         checkout_session_id=session.id,
+    )
+
+
+@router.get("/onboarding-status", response_model=OnboardingStatusRead)
+def onboarding_status(
+    token: str = Query(min_length=32, max_length=512),
+    db: Session = Depends(get_db),
+) -> OnboardingStatusRead:
+    signup = db.scalar(
+        select(PendingSignup).where(
+            PendingSignup.onboarding_token_hash == hash_onboarding_token(token)
+        )
+    )
+    if not signup:
+        raise HTTPException(status_code=404, detail="Onboarding session not found")
+
+    return OnboardingStatusRead(
+        status=signup.status.value,
+        company_name=signup.company_name,
+        email=signup.email,
+        plan_code=signup.plan_code,
+    )
+
+
+@router.post("/complete-onboarding", response_model=OnboardingCompleteRead)
+def complete_onboarding(
+    payload: OnboardingCompleteRequest,
+    db: Session = Depends(get_db),
+) -> OnboardingCompleteRead:
+    signup = db.scalar(
+        select(PendingSignup).where(
+            PendingSignup.onboarding_token_hash
+            == hash_onboarding_token(payload.onboarding_token)
+        )
+    )
+    if not signup:
+        raise HTTPException(status_code=404, detail="Onboarding session not found")
+    if signup.status == SignupStatus.completed:
+        raise HTTPException(status_code=409, detail="Onboarding already completed")
+    if signup.status != SignupStatus.paid_pending_setup:
+        raise HTTPException(status_code=409, detail="Payment is not confirmed")
+
+    if db.scalar(select(Organization).where(Organization.slug == payload.organization_slug)):
+        raise HTTPException(status_code=409, detail="Organization slug already exists")
+
+    seat_limit = PLAN_SEATS[signup.plan_code]
+    organization = Organization(
+        name=signup.company_name,
+        slug=payload.organization_slug,
+        seat_limit=seat_limit,
+    )
+    db.add(organization)
+    db.flush()
+
+    subscription = Subscription(
+        organization_id=organization.id,
+        stripe_customer_id=signup.stripe_customer_id,
+        stripe_subscription_id=signup.stripe_subscription_id,
+        stripe_price_id=get_price_id(signup.plan_code),
+        plan_code=signup.plan_code,
+        status=SubscriptionStatus.active,
+    )
+    db.add(subscription)
+    signup.status = SignupStatus.completed
+    db.commit()
+
+    return OnboardingCompleteRead(
+        organization_id=organization.id,
+        organization_slug=organization.slug,
+        seat_limit=organization.seat_limit,
     )
 
 
@@ -105,12 +195,18 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)) -> dic
             sig_header=signature,
             secret=settings.stripe_webhook_secret,
         )
-    except (ValueError, stripe.SignatureVerificationError) as exc:
+    except Exception as exc:
         raise HTTPException(status_code=400, detail="Invalid Stripe webhook") from exc
+
+    event_id = event["id"]
+    if db.get(StripeWebhookEvent, event_id):
+        return {"received": True}
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
-        signup_id = session.get("client_reference_id") or session.get("metadata", {}).get("signup_id")
+        signup_id = session.get("client_reference_id") or session.get("metadata", {}).get(
+            "signup_id"
+        )
         if signup_id:
             signup = db.get(PendingSignup, signup_id)
             if signup:
@@ -118,6 +214,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)) -> dic
                 signup.stripe_customer_id = session.get("customer")
                 signup.stripe_subscription_id = session.get("subscription")
                 signup.status = SignupStatus.paid_pending_setup
-                db.commit()
 
+    db.add(StripeWebhookEvent(id=event_id, event_type=event["type"]))
+    db.commit()
     return {"received": True}
