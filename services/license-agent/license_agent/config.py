@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     license_server_url: str = "https://license.blissitek.ca"
     state_dir: str = "/var/lib/bliss-mfa/license"
     bliss_signing_public_key_pem: str | None = None
+    bliss_signing_public_key_file: str | None = None
     software_version: str = "0.1.0"
     heartbeat_timeout_seconds: int = 15
 
