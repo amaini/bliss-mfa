@@ -120,7 +120,10 @@ class LicenseState:
         self.lease_path.unlink(missing_ok=True)
 
     def verify_lease(self, token: str) -> dict[str, Any]:
-        pem = get_settings().bliss_signing_public_key_pem
+        settings = get_settings()
+        pem = settings.bliss_signing_public_key_pem
+        if not pem and settings.bliss_signing_public_key_file:
+            pem = Path(settings.bliss_signing_public_key_file).read_text()
         if not pem:
             raise RuntimeError("Bliss signing public key is not configured")
 
