@@ -3,7 +3,7 @@ from __future__ import annotations
 import hmac
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
