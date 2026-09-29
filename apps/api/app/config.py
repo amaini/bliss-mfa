@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     stripe_price_starter: str | None = None
     stripe_price_business: str | None = None
     stripe_price_business_plus: str | None = None
+    portal_base_url: str = "http://localhost:3000"
 
     enrollment_ttl_minutes: int = Field(default=15, ge=5, le=120)
     bliss_bootstrap_api_key: str | None = None
