@@ -1,67 +1,83 @@
 # Product Roadmap
 
-## Phase 0 — Foundation
+## Architecture decision
 
-- repository structure
-- architecture
-- security model
-- multiOTP API discovery
-- tenant model
-- RBAC model
-- enrollment/recovery state machines
-- Stripe architecture
-- local Docker baseline
+The hosted multi-tenant management plane has been superseded by an
+appliance-first product. Customer MFA management and authentication stay inside
+the customer environment. Bliss centrally owns licensing, billing, releases
+and support.
 
-No production deployment in Phase 0.
+The earlier `apps/api` / `apps/portal` implementation remains in the branch
+temporarily as migration reference and is not the intended production topology.
 
-## Phase 1 — MFA management
+## Phase A — Appliance core
 
-- portal authentication
-- organizations
-- users
-- MFA enrollment
-- replace/revoke device
-- activate/deactivate
-- unlock/resync
-- audit log
-- Bliss technician RBAC
-- customer administrator role
+Implemented foundation:
+- local owner/admin/operator/readonly accounts
+- local RDP-user lifecycle API
+- local enrollment and OTP verification
+- local enable/disable/unlock/revoke/resync/delete operations
+- local dashboard and management portal
+- local hash-chained audit log and integrity verification
+- allow-listed multiOTP sidecar boundary
 
-## Phase 2 — Billing
+Still required before production:
+- validate every multiOTP CLI return code on a disposable real instance
+- finish and validate safe token/device replacement semantics
+- production migrations and backup/restore
+- TLS packaging for localhost/LAN management
 
-- Stripe products/prices
-- Checkout
-- webhook validation/idempotency
-- customer mapping
-- subscription entitlement
-- user-count limits
-- Stripe Customer Portal
-- billing grace policy
+## Phase B — Licensing
 
-## Phase 3 — Bliss website
+Implemented foundation:
+- one license bound to one installation identity
+- Ed25519 device identity
+- Bliss-signed leases
+- online activation
+- challenge-response heartbeat
+- per-protected-RDP-user seat limits
+- offline grace/restricted states
+- signed release / force-release flow for online installations
+- offline annual activation request/response flow
+- trusted-time persistence
+- machine-fingerprint anomaly signal
+- local audit-head heartbeat checkpoint
+- Stripe Customer Portal session hook
 
-- `blissitek.ca/managed-mfa`
-- product positioning
-- pricing
-- features
-- FAQ
-- security section
-- Checkout CTA
-- portal login CTA
+Still required before production:
+- provision production Bliss signing keys
+- signing-key rotation procedure
+- database migrations
+- admin UI for Bliss licensing staff
+- Stripe subscription/seat webhook mapping after final products/prices exist
+- automated heartbeat scheduler/service supervision
+- compiled/TPM-backed license-agent hardening
 
-## Phase 4 — MSP automation
+## Phase C — Distribution
 
-- onboarding email
-- n8n notifications
-- Zammad integration
-- failed-payment escalation
-- license/seat alerts
-- operational reports
+- signed appliance releases
+- versioned upgrade manifests
+- rollback-safe updater
+- Windows/Linux appliance installation packages as selected
+- local-only and LAN-management deployment profiles
+- recovery/backup documentation
+- automated diagnostics bundle
 
-## Phase 5 — Branding and polish
+## Phase D — Commercial launch
 
-- Bliss-branded enrollment
-- branded email templates
-- customer logos
-- reports
-- deeper UI rebranding where license-compliant and maintainable
+- final RDP-seat pricing
+- online monthly subscription
+- offline annual/prepaid pricing
+- Stripe products and customer portal configuration
+- website product page
+- service agreement and responsibility boundaries
+- pilot offices
+- production security review and load/failure testing
+
+## Phase E — MSP automation
+
+- Zammad onboarding/support tickets
+- n8n licensing and renewal alerts
+- expired/offline heartbeat warnings
+- version/compliance reporting
+- deployment-health reporting without customer MFA secret data
