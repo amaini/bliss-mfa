@@ -35,6 +35,14 @@ class Settings(BaseSettings):
     enrollment_ttl_minutes: int = Field(default=15, ge=5, le=120)
     bliss_bootstrap_api_key: str | None = None
 
+    oidc_issuer: str | None = None
+    oidc_audience: str | None = None
+    oidc_jwks_url: str | None = None
+    oidc_groups_claim: str = "groups"
+    oidc_staff_admin_group: str = "bliss-mfa-super-admin"
+    oidc_staff_technician_group: str = "bliss-mfa-technician"
+    oidc_staff_billing_group: str = "bliss-mfa-billing"
+
 
 @lru_cache
 def get_settings() -> Settings:
