@@ -54,6 +54,13 @@ class SubscriptionStatus(str, enum.Enum):
     ended = "ended"
 
 
+class SignupStatus(str, enum.Enum):
+    checkout_created = "checkout_created"
+    paid_pending_setup = "paid_pending_setup"
+    completed = "completed"
+    canceled = "canceled"
+
+
 class Organization(Base):
     __tablename__ = "organizations"
 
@@ -170,3 +177,25 @@ class Subscription(Base):
     )
 
     organization: Mapped[Organization] = relationship(back_populates="subscription")
+
+
+class PendingSignup(Base):
+    __tablename__ = "pending_signups"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    company_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
+    plan_code: Mapped[str] = mapped_column(String(80), nullable=False)
+    onboarding_token_hash: Mapped[str] = mapped_column(
+        String(128), nullable=False, unique=True, index=True
+    )
+    stripe_checkout_session_id: Mapped[str | None] = mapped_column(String(255), unique=True)
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(255))
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(255))
+    status: Mapped[SignupStatus] = mapped_column(
+        Enum(SignupStatus), default=SignupStatus.checkout_created, nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
