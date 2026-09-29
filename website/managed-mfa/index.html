@@ -1,0 +1,131 @@
+<section class="bliss-mfa-page">
+  <style>
+    .bliss-mfa-page{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172033;background:#fff}
+    .bliss-mfa-page *{box-sizing:border-box}
+    .bliss-mfa-wrap{max-width:1180px;margin:0 auto;padding:72px 24px}
+    .bliss-mfa-hero{display:grid;grid-template-columns:1.2fr .8fr;gap:56px;align-items:center;padding:34px 0 80px}
+    .bliss-mfa-kicker{font-size:13px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#263e91}
+    .bliss-mfa-page h1{font-size:clamp(42px,6vw,72px);line-height:1.02;margin:12px 0 22px;letter-spacing:-.035em}
+    .bliss-mfa-page h2{font-size:34px;margin:0 0 14px}
+    .bliss-mfa-lead{font-size:20px;line-height:1.6;color:#657087;max-width:760px}
+    .bliss-mfa-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
+    .bliss-mfa-button{display:inline-block;text-decoration:none;border-radius:10px;padding:13px 20px;font-weight:800}
+    .bliss-mfa-button.primary{background:#263e91;color:white}
+    .bliss-mfa-button.secondary{border:1px solid #dfe5ef;color:#263e91;background:#fff}
+    .bliss-mfa-panel{border:1px solid #e4e9f2;background:#f7f9fd;border-radius:18px;padding:26px}
+    .bliss-mfa-panel strong{display:block;font-size:19px;margin-bottom:14px}
+    .bliss-mfa-list{display:grid;gap:12px;margin:0;padding:0;list-style:none}
+    .bliss-mfa-list li{display:flex;gap:10px;align-items:flex-start;color:#48546b}
+    .bliss-mfa-list li:before{content:"✓";font-weight:900;color:#263e91}
+    .bliss-mfa-section{padding:74px 0;border-top:1px solid #edf0f5}
+    .bliss-mfa-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:30px}
+    .bliss-mfa-card{border:1px solid #e4e9f2;border-radius:15px;padding:24px}
+    .bliss-mfa-card h3{margin:0 0 10px;font-size:19px}
+    .bliss-mfa-card p{margin:0;color:#657087;line-height:1.6}
+    .bliss-mfa-steps{counter-reset:step;display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:30px}
+    .bliss-mfa-step{counter-increment:step;border-top:3px solid #263e91;padding-top:16px}
+    .bliss-mfa-step:before{content:"0" counter(step);display:block;color:#263e91;font-weight:900;margin-bottom:10px}
+    .bliss-mfa-plan-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:28px}
+    .bliss-mfa-plan{border:1px solid #dfe5ef;border-radius:16px;padding:26px;background:#fff}
+    .bliss-mfa-plan.featured{border:2px solid #263e91}
+    .bliss-mfa-plan-name{color:#263e91;font-weight:900}
+    .bliss-mfa-plan h3{font-size:27px;margin:8px 0 6px}
+    .bliss-mfa-note{font-size:14px;color:#778198}
+    .bliss-mfa-cta{text-align:center;background:#111a33;color:#fff;border-radius:20px;padding:54px 28px}
+    .bliss-mfa-cta p{color:#cbd4e7;max-width:680px;margin:12px auto 24px;line-height:1.6}
+    @media(max-width:850px){.bliss-mfa-hero{grid-template-columns:1fr}.bliss-mfa-grid,.bliss-mfa-plan-grid{grid-template-columns:1fr}.bliss-mfa-steps{grid-template-columns:1fr 1fr}}
+    @media(max-width:520px){.bliss-mfa-wrap{padding:48px 18px}.bliss-mfa-steps{grid-template-columns:1fr}}
+  </style>
+
+  <div class="bliss-mfa-wrap">
+    <div class="bliss-mfa-hero">
+      <div>
+        <div class="bliss-mfa-kicker">Bliss Secure MFA</div>
+        <h1>Secure business access without making MFA difficult to manage.</h1>
+        <p class="bliss-mfa-lead">
+          Managed multi-factor authentication for Windows, RDP, VPN and business
+          systems—with centralized onboarding, lost-device recovery, revocation
+          and audit controls from Bliss IT Solutions.
+        </p>
+        <div class="bliss-mfa-actions">
+          <a class="bliss-mfa-button primary" href="https://mfa.blissitek.ca/plans">Start setup</a>
+          <a class="bliss-mfa-button secondary" href="/contact/">Talk to Bliss</a>
+        </div>
+      </div>
+
+      <div class="bliss-mfa-panel">
+        <strong>Built for business operations</strong>
+        <ul class="bliss-mfa-list">
+          <li>RDP and VPN MFA protection</li>
+          <li>Authenticator app enrollment</li>
+          <li>Central user and device management</li>
+          <li>Lost-phone replacement workflow</li>
+          <li>Fast revoke and offboarding</li>
+          <li>Technician audit history</li>
+          <li>Managed setup by Bliss IT Solutions</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="bliss-mfa-section">
+      <div class="bliss-mfa-kicker">Why Bliss Secure MFA</div>
+      <h2>Security controls your team can actually operate.</h2>
+      <div class="bliss-mfa-grid">
+        <div class="bliss-mfa-card">
+          <h3>Simple onboarding</h3>
+          <p>Invite users, provide a secure enrollment flow and confirm the authenticator before protection goes live.</p>
+        </div>
+        <div class="bliss-mfa-card">
+          <h3>Device recovery</h3>
+          <p>Lost or replaced phone? Revoke the old device and securely enroll a replacement without rebuilding the user.</p>
+        </div>
+        <div class="bliss-mfa-card">
+          <h3>Managed by IT</h3>
+          <p>Bliss technicians can help with onboarding, unlocking, revocation and recovery while every sensitive action is audited.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bliss-mfa-section">
+      <div class="bliss-mfa-kicker">How it works</div>
+      <h2>From subscription to protected user.</h2>
+      <div class="bliss-mfa-steps">
+        <div class="bliss-mfa-step"><strong>Choose your plan</strong><p>Select capacity for your organization.</p></div>
+        <div class="bliss-mfa-step"><strong>Secure checkout</strong><p>Billing is handled through Stripe Checkout.</p></div>
+        <div class="bliss-mfa-step"><strong>Configure users</strong><p>Bliss or your administrator adds the users who need MFA.</p></div>
+        <div class="bliss-mfa-step"><strong>Enroll and protect</strong><p>Users scan their enrollment QR and verify their first code.</p></div>
+      </div>
+    </div>
+
+    <div class="bliss-mfa-section">
+      <div class="bliss-mfa-kicker">Plans</div>
+      <h2>Start with the capacity you need.</h2>
+      <p class="bliss-mfa-note">Final pricing will be inserted after Stripe products and Bliss service pricing are approved.</p>
+      <div class="bliss-mfa-plan-grid">
+        <div class="bliss-mfa-plan">
+          <div class="bliss-mfa-plan-name">Starter</div>
+          <h3>Up to 10 users</h3>
+          <p>For small offices and professional teams.</p>
+        </div>
+        <div class="bliss-mfa-plan featured">
+          <div class="bliss-mfa-plan-name">Business</div>
+          <h3>Up to 50 users</h3>
+          <p>For growing organizations needing centralized MFA operations.</p>
+        </div>
+        <div class="bliss-mfa-plan">
+          <div class="bliss-mfa-plan-name">Business+</div>
+          <h3>Up to 100 users</h3>
+          <p>For larger environments and managed onboarding at scale.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bliss-mfa-section">
+      <div class="bliss-mfa-cta">
+        <h2>Ready to protect your remote access?</h2>
+        <p>Start with secure checkout or speak with Bliss IT Solutions if you want us to handle deployment and onboarding for you.</p>
+        <a class="bliss-mfa-button primary" href="https://mfa.blissitek.ca/plans">Start setup</a>
+      </div>
+    </div>
+  </div>
+</section>
