@@ -12,6 +12,7 @@ dependencies = [
   "httpx>=0.28,<1",
   "PyJWT>=2.10,<3",
   "argon2-cffi>=25,<26",
+  "apscheduler>=3.11,<4",
 ]
 
 [project.optional-dependencies]
