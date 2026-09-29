@@ -5,11 +5,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.auth import Principal, require_admin_principal, require_staff_principal
 from app.db import Base, get_db
 from app.dependencies import get_multiotp_adapter
 from app.main import app
 from app.multiotp import MockMultiOtpAdapter
-from app.security import require_bootstrap_admin
 
 
 engine = create_engine(
@@ -33,7 +33,14 @@ adapter = MockMultiOtpAdapter()
 
 app.dependency_overrides[get_db] = override_db
 app.dependency_overrides[get_multiotp_adapter] = lambda: adapter
-app.dependency_overrides[require_bootstrap_admin] = lambda: "test-admin"
+test_principal = Principal(
+    subject="test-admin",
+    email="test@example.com",
+    groups=frozenset({"bliss-mfa-super-admin"}),
+    bootstrap=True,
+)
+app.dependency_overrides[require_staff_principal] = lambda: test_principal
+app.dependency_overrides[require_admin_principal] = lambda: test_principal
 
 client = TestClient(app)
 
