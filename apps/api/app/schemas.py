@@ -74,3 +74,21 @@ class CheckoutCreateRequest(BaseModel):
 class CheckoutCreateRead(BaseModel):
     checkout_url: str
     checkout_session_id: str
+
+
+class OnboardingStatusRead(BaseModel):
+    status: str
+    company_name: str
+    email: str
+    plan_code: str
+
+
+class OnboardingCompleteRequest(BaseModel):
+    onboarding_token: str = Field(min_length=32, max_length=512)
+    organization_slug: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{1,98}[a-z0-9]$")
+
+
+class OnboardingCompleteRead(BaseModel):
+    organization_id: str
+    organization_slug: str
+    seat_limit: int
