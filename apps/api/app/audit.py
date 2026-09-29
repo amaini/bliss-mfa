@@ -11,6 +11,7 @@ def write_audit(
     organization_id: str,
     actor_id: str | None,
     action: str,
+    actor_type: str = "portal_admin",
     subject_type: str,
     subject_id: str | None,
     reason: str | None = None,
@@ -20,7 +21,7 @@ def write_audit(
 ) -> AuditEvent:
     event = AuditEvent(
         organization_id=organization_id,
-        actor_type="portal_admin",
+        actor_type=actor_type,
         actor_id=actor_id,
         action=action,
         subject_type=subject_type,
