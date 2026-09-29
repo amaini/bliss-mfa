@@ -61,6 +61,24 @@ class SignupStatus(str, enum.Enum):
     canceled = "canceled"
 
 
+class PortalUserStatus(str, enum.Enum):
+    invited = "invited"
+    active = "active"
+    disabled = "disabled"
+
+
+class MembershipRole(str, enum.Enum):
+    customer_admin = "customer_admin"
+    customer_operator = "customer_operator"
+    readonly = "readonly"
+
+
+class StaffRole(str, enum.Enum):
+    super_admin = "super_admin"
+    technician = "technician"
+    billing = "billing"
+
+
 class Organization(Base):
     __tablename__ = "organizations"
 
@@ -207,3 +225,37 @@ class StripeWebhookEvent(Base):
     id: Mapped[str] = mapped_column(String(255), primary_key=True)
     event_type: Mapped[str] = mapped_column(String(120), nullable=False)
     processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PortalUser(Base):
+    __tablename__ = "portal_users"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True, index=True)
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    status: Mapped[PortalUserStatus] = mapped_column(
+        Enum(PortalUserStatus), default=PortalUserStatus.invited, nullable=False
+    )
+    is_bliss_staff: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    staff_role: Mapped[StaffRole | None] = mapped_column(Enum(StaffRole))
+    external_subject: Mapped[str | None] = mapped_column(String(255), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class OrganizationMembership(Base):
+    __tablename__ = "organization_memberships"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "portal_user_id", name="uq_org_portal_user"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    portal_user_id: Mapped[str] = mapped_column(
+        ForeignKey("portal_users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    role: Mapped[MembershipRole] = mapped_column(
+        Enum(MembershipRole), default=MembershipRole.readonly, nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
