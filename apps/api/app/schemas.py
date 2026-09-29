@@ -63,3 +63,14 @@ class RevokeDeviceRequest(BaseModel):
 class HealthRead(BaseModel):
     status: str
     service: str
+
+
+class CheckoutCreateRequest(BaseModel):
+    company_name: str = Field(min_length=2, max_length=200)
+    email: EmailStr
+    plan_code: str = Field(pattern=r"^(starter|business|business_plus)$")
+
+
+class CheckoutCreateRead(BaseModel):
+    checkout_url: str
+    checkout_session_id: str
