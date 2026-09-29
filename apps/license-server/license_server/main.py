@@ -251,9 +251,6 @@ def heartbeat(payload: HeartbeatRequest, db: Session = Depends(get_db)) -> Lease
         raise HTTPException(status_code=404, detail="Installation not found")
     if license.license_type != LicenseType.online:
         raise HTTPException(status_code=409, detail="Offline license does not use heartbeat")
-    if license.status != LicenseStatus.active:
-        raise HTTPException(status_code=403, detail=f"License is {license.status.value}")
-
     challenge = get_active_challenge(db, payload.installation_id, payload.nonce)
     message = {
         "installation_id": payload.installation_id,
@@ -288,6 +285,14 @@ def heartbeat(payload: HeartbeatRequest, db: Session = Depends(get_db)) -> Lease
     license.last_machine_fingerprint = payload.machine_fingerprint
     license.last_audit_head_hash = payload.audit_head_hash
     license.last_software_version = payload.software_version
+    if payload.protected_rdp_users > license.max_rdp_users:
+        event(
+            db,
+            license,
+            "license.seat_overage_reported",
+            payload.installation_id,
+            detail=f"{payload.protected_rdp_users}/{license.max_rdp_users}",
+        )
     event(
         db,
         license,
