@@ -199,3 +199,11 @@ class PendingSignup(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
+
+
+class StripeWebhookEvent(Base):
+    __tablename__ = "stripe_webhook_events"
+
+    id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    event_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
