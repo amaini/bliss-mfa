@@ -41,7 +41,6 @@ class UserCreate(BaseModel):
     username: str = Field(pattern=r"^[A-Za-z0-9_.@-]{1,100}$")
     display_name: str | None = Field(default=None, max_length=255)
     email: EmailStr | None = None
-    protected_rdp: bool = True
 
 
 class UserRead(BaseModel):
