@@ -44,7 +44,6 @@ export default function UsersPage() {
           username: String(form.get("username") ?? "").trim(),
           display_name: String(form.get("display_name") ?? "").trim() || null,
           email: String(form.get("email") ?? "").trim() || null,
-          protected_rdp: true,
         }),
       });
       const enrollment = await api<{ provisioning_uri: string }>(`/users/${user.id}/enrollment`, {
