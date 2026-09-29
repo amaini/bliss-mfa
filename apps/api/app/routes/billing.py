@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import json
-
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..billing import (
