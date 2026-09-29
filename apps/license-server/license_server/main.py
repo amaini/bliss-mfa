@@ -31,6 +31,7 @@ from .schemas import (
     OfflineIssueRequest,
     OfflineReleaseCode,
     ReleaseRequest,
+    StripeLinkRequest,
 )
 from .security import require_admin
 
@@ -499,6 +500,29 @@ def billing_portal(
         return_url=settings.stripe_return_url,
     )
     return BillingPortalResponse(url=session.url)
+
+
+@app.post(
+    "/v1/admin/licenses/{license_id}/stripe",
+    dependencies=[Depends(require_admin)],
+)
+def link_stripe_customer(
+    license_id: str,
+    payload: StripeLinkRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, str | None]:
+    license = db.get(License, license_id)
+    if not license:
+        raise HTTPException(status_code=404, detail="License not found")
+    license.stripe_customer_id = payload.customer_id
+    license.stripe_subscription_id = payload.subscription_id
+    event(db, license, "billing.stripe_linked", license.installation_id)
+    db.commit()
+    return {
+        "license_id": license.id,
+        "stripe_customer_id": license.stripe_customer_id,
+        "stripe_subscription_id": license.stripe_subscription_id,
+    }
 
 
 @app.post(
