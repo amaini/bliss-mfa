@@ -136,3 +136,31 @@ class OrganizationStatsRead(BaseModel):
     active_devices: int
     pending_enrollments: int
     seat_limit: int
+
+
+class PrincipalRead(BaseModel):
+    subject: str
+    email: str | None
+    groups: list[str]
+
+
+class MembershipCreate(BaseModel):
+    email: EmailStr
+    role: str = Field(pattern=r"^(customer_admin|customer_operator|readonly)$")
+
+
+class MembershipRead(BaseModel):
+    id: str
+    organization_id: str
+    portal_user_id: str
+    email: str
+    role: str
+    status: str
+
+
+class MyOrganizationRead(BaseModel):
+    id: str
+    name: str
+    slug: str
+    role: str
+    seat_limit: int
