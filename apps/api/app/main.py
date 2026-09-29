@@ -10,6 +10,7 @@ from .routes.billing import router as billing_router
 from .routes.dashboard import router as dashboard_router
 from .routes.enrollments import router as enrollments_router
 from .routes.organizations import router as organizations_router
+from .routes.portal import router as portal_router
 from .routes.users import router as users_router
 from .schemas import HealthRead
 
@@ -40,6 +41,7 @@ app.include_router(billing_router, prefix="/v1")
 app.include_router(audit_router, prefix="/v1")
 app.include_router(dashboard_router, prefix="/v1")
 app.include_router(users_router, prefix="/v1")
+app.include_router(portal_router, prefix="/v1")
 
 
 @app.get("/health", response_model=HealthRead, tags=["system"])
