@@ -260,11 +260,34 @@ def heartbeat(payload: HeartbeatRequest, db: Session = Depends(get_db)) -> Lease
         "nonce": payload.nonce,
         "protected_rdp_users": payload.protected_rdp_users,
         "software_version": payload.software_version,
+        "machine_fingerprint": payload.machine_fingerprint,
+        "audit_head_hash": payload.audit_head_hash,
     }
     verify_installation_signature(license, payload.signature, message)
     challenge.used_at = utcnow()
     license.last_seen_at = utcnow()
     license.last_reported_seats = payload.protected_rdp_users
+    if (
+        license.last_machine_fingerprint
+        and payload.machine_fingerprint
+        and license.last_machine_fingerprint != payload.machine_fingerprint
+    ):
+        event(
+            db,
+            license,
+            "installation.fingerprint_changed",
+            payload.installation_id,
+            detail=json.dumps(
+                {
+                    "previous": license.last_machine_fingerprint,
+                    "current": payload.machine_fingerprint,
+                },
+                separators=(",", ":"),
+            ),
+        )
+    license.last_machine_fingerprint = payload.machine_fingerprint
+    license.last_audit_head_hash = payload.audit_head_hash
+    license.last_software_version = payload.software_version
     event(
         db,
         license,
