@@ -85,3 +85,8 @@ class LicenseStatusRead(BaseModel):
 
 class OfflineReleaseCode(BaseModel):
     release_code: str = Field(min_length=20, max_length=10000)
+
+
+class StripeLinkRequest(BaseModel):
+    customer_id: str = Field(min_length=3, max_length=255)
+    subscription_id: str | None = Field(default=None, max_length=255)
