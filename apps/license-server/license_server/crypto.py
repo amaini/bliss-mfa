@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+from pathlib import Path
 from datetime import datetime
 from typing import Any
 
@@ -20,7 +21,10 @@ def canonical_json(payload: dict[str, Any]) -> bytes:
 
 
 def get_signing_key() -> Ed25519PrivateKey:
-    pem = get_settings().signing_private_key_pem
+    settings = get_settings()
+    pem = settings.signing_private_key_pem
+    if not pem and settings.signing_private_key_file:
+        pem = Path(settings.signing_private_key_file).read_text()
     if not pem:
         raise RuntimeError("License signing key is not configured")
     key = serialization.load_pem_private_key(pem.encode(), password=None)
