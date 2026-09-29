@@ -62,6 +62,11 @@ def start_enrollment(
     adapter: MultiOtpAdapter = Depends(get_multiotp_adapter),
 ) -> EnrollmentStartRead:
     user = get_user_or_404(db, organization_id, user_id)
+    if user.status != UserStatus.pending:
+        raise HTTPException(
+            status_code=409,
+            detail="Enrollment can only start for a pending MFA user",
+        )
 
     raw_token = secrets.token_urlsafe(48)
     settings = get_settings()
