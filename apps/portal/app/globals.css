@@ -222,3 +222,180 @@ input:focus {
   .plans { grid-template-columns: 1fr; }
   .publicNav { margin-bottom: 38px; }
 }
+
+
+.contextBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  background: white;
+  border-radius: 12px;
+}
+
+.contextBar > div { display: grid; gap: 3px; }
+.contextBar span { color: var(--muted); font-size: 12px; }
+.contextBar strong { font-size: 15px; }
+.textLink { color: var(--brand); font-weight: 800; text-decoration: none; }
+
+.tableCard { padding: 0; overflow: hidden; }
+.tableHeader,
+.tableRow,
+.userHeader,
+.userRow,
+.auditHeader,
+.auditRow {
+  display: grid;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tableHeader { grid-template-columns: 2fr 1fr .7fr 1.2fr; background: #fafbfe; color: var(--muted); font-size: 12px; font-weight: 800; text-transform: uppercase; }
+.tableRow { grid-template-columns: 2fr 1fr .7fr 1.2fr; }
+.userHeader { grid-template-columns: 1.5fr .7fr 1.4fr 2fr; background: #fafbfe; color: var(--muted); font-size: 12px; font-weight: 800; text-transform: uppercase; }
+.userRow { grid-template-columns: 1.5fr .7fr 1.4fr 2fr; }
+.auditHeader { grid-template-columns: 1.15fr 1.4fr 1fr 1.5fr .65fr; background: #fafbfe; color: var(--muted); font-size: 12px; font-weight: 800; text-transform: uppercase; }
+.auditRow { grid-template-columns: 1.15fr 1.4fr 1fr 1.5fr .65fr; font-size: 13px; }
+
+.tableRow:last-child,
+.userRow:last-child,
+.auditRow:last-child { border-bottom: 0; }
+
+.tableRow > div:first-child,
+.userRow > div:first-child { display: grid; gap: 3px; }
+
+.tableRow small,
+.userRow small { color: var(--muted); }
+
+.rowActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.rowActions.wrap { flex-wrap: wrap; justify-content: flex-start; }
+
+.rowActions a,
+.rowActions button {
+  border: 0;
+  background: transparent;
+  color: var(--brand);
+  text-decoration: none;
+  font-weight: 800;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.rowActions button:disabled { opacity: .45; cursor: wait; }
+.rowActions .dangerText { color: #a12a2a; }
+
+.emptyState { padding: 28px 18px; color: var(--muted); text-align: center; }
+
+.inlineForm {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 16px;
+}
+
+.inlineForm > div { display: grid; gap: 6px; }
+
+.enrollmentPanel {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 18px;
+  align-items: start;
+  margin-bottom: 16px;
+}
+
+.enrollmentPanel details,
+.enrollmentPanel small,
+.enrollmentPanel .secondaryButton { grid-column: 1 / -1; }
+
+.qrImage {
+  width: 220px;
+  height: 220px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: white;
+  padding: 8px;
+}
+
+.secretCode {
+  display: block;
+  word-break: break-all;
+  margin-top: 8px;
+  padding: 10px;
+  background: #f6f8fb;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.secondaryButton {
+  justify-self: start;
+  border: 1px solid var(--line);
+  background: white;
+  color: var(--ink);
+  padding: 9px 13px;
+  border-radius: 9px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.muted { color: var(--muted); line-height: 1.6; }
+
+.statusPill {
+  display: inline-flex;
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eef1f6;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.status-active { background: #edf8ef; color: #2d6336; }
+.status-pending { background: #fff7e8; color: #8a5a00; }
+.status-disabled { background: #f3f3f5; color: #666; }
+.status-locked { background: #fff0f0; color: #a12a2a; }
+
+.good { color: #2d6336; font-weight: 800; }
+.bad { color: #a12a2a; font-weight: 800; }
+
+.sidebarFoot a {
+  color: #dbe2f1;
+  text-decoration: none;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 1050px) {
+  .tableHeader,
+  .auditHeader,
+  .userHeader { display: none; }
+
+  .tableRow,
+  .userRow,
+  .auditRow {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .rowActions { justify-content: flex-start; }
+  .inlineForm { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 650px) {
+  .inlineForm { grid-template-columns: 1fr; }
+  .enrollmentPanel { grid-template-columns: 1fr; }
+  .qrImage { width: min(260px, 100%); height: auto; }
+}
