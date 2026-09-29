@@ -47,6 +47,8 @@ class HeartbeatRequest(BaseModel):
     signature: str
     protected_rdp_users: int = Field(ge=0, le=1000000)
     software_version: str = Field(default="unknown", max_length=100)
+    machine_fingerprint: str | None = Field(default=None, max_length=128)
+    audit_head_hash: str | None = Field(default=None, max_length=128)
 
 
 class ReleaseRequest(BaseModel):
