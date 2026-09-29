@@ -111,10 +111,10 @@ class LicenseAgentClient:
         response.raise_for_status()
         return response.json()
 
-    def heartbeat(self, seats: int) -> dict:
+    def heartbeat(self, seats: int, audit_head_hash: str | None = None) -> dict:
         response = httpx.post(
             f"{self.base_url}/v1/heartbeat",
-            json={"protected_rdp_users": seats},
+            json={"protected_rdp_users": seats, "audit_head_hash": audit_head_hash},
             timeout=20,
         )
         response.raise_for_status()
