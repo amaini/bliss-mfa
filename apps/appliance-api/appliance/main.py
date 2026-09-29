@@ -3,6 +3,7 @@ from __future__ import annotations
 import hmac
 
 import httpx
+from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import Depends, FastAPI, HTTPException, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -10,7 +11,7 @@ from sqlalchemy.orm import Session
 from .audit import write_audit
 from .clients import LicenseAgentClient, MultiOtpClient
 from .config import get_settings
-from .db import Base, engine, get_db
+from .db import Base, SessionLocal, engine, get_db
 from .models import AdminRole, AuditEvent, LocalAdmin, MfaUser, UserStatus, event_digest
 from .schemas import (
     AdminCreate,
@@ -41,6 +42,7 @@ from .security import (
 
 
 settings = get_settings()
+scheduler = BackgroundScheduler(daemon=True)
 app = FastAPI(title="Bliss Secure MFA Appliance API", version="0.1.0")
 
 
@@ -71,6 +73,43 @@ def protected_seat_count(db: Session) -> int:
         )
         or 0
     )
+
+
+def automatic_license_heartbeat() -> None:
+    db = SessionLocal()
+    try:
+        audit_head = db.scalar(select(AuditEvent).order_by(AuditEvent.created_at.desc()).limit(1))
+        license_agent().heartbeat(
+            protected_seat_count(db),
+            audit_head.event_hash if audit_head else None,
+        )
+    except (httpx.HTTPError, RuntimeError):
+        # A network outage must not destroy the last valid signed lease.
+        pass
+    finally:
+        db.close()
+
+
+@app.on_event("startup")
+def start_heartbeat_scheduler() -> None:
+    if settings.app_env == "test" or settings.heartbeat_interval_hours <= 0:
+        return
+    scheduler.add_job(
+        automatic_license_heartbeat,
+        "interval",
+        hours=settings.heartbeat_interval_hours,
+        id="bliss-license-heartbeat",
+        replace_existing=True,
+        next_run_time=None,
+    )
+    if not scheduler.running:
+        scheduler.start()
+
+
+@app.on_event("shutdown")
+def stop_heartbeat_scheduler() -> None:
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
 
 
 def user_or_404(db: Session, user_id: str) -> MfaUser:
