@@ -1,6 +1,6 @@
 import hashlib
 import secrets
-from datetime import timedelta
+from datetime import timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -117,7 +117,10 @@ def verify_enrollment(
         raise HTTPException(status_code=404, detail="Enrollment not found")
 
     now = utcnow()
-    if enrollment.expires_at < now:
+    expires_at = enrollment.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < now:
         enrollment.status = EnrollmentStatus.expired
         db.commit()
         raise HTTPException(status_code=410, detail="Enrollment expired")
