@@ -22,6 +22,7 @@ export default function LicensePage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [offlineCode, setOfflineCode] = useState<string | null>(null);
   const [releaseCode, setReleaseCode] = useState<string | null>(null);
+  const [transferActivationCode, setTransferActivationCode] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -129,7 +130,11 @@ export default function LicensePage() {
   async function release() {
     if (!window.confirm("Deactivate this license so it can be transferred to another appliance?")) return;
     try {
-      await api("/license/release", { method: "POST", body: "{}" });
+      const result = await api<{ replacement_activation_code: string }>("/license/release", {
+        method: "POST",
+        body: "{}",
+      });
+      setTransferActivationCode(result.replacement_activation_code);
       setMessage("License released from this appliance.");
       await load();
     } catch (err) {
@@ -195,6 +200,17 @@ export default function LicensePage() {
         </section>
       ) : null}
 
+
+      {transferActivationCode ? (
+        <section className="card stack" style={{ marginTop: 16 }}>
+          <div>
+            <p className="eyebrow">Transfer ready</p>
+            <h2>Use this activation code on the replacement appliance</h2>
+          </div>
+          <code className="codeBox">{transferActivationCode}</code>
+          <p className="muted">Treat this one-time code as a licensing credential until the new appliance consumes it.</p>
+        </section>
+      ) : null}
       {releaseCode ? (
         <section className="card stack" style={{ marginTop: 16 }}>
           <div>
