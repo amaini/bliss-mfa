@@ -48,6 +48,9 @@ class License(Base):
     installation_public_key: Mapped[str | None] = mapped_column(Text)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_reported_seats: Mapped[int | None] = mapped_column(Integer)
+    last_software_version: Mapped[str | None] = mapped_column(String(100))
+    last_machine_fingerprint: Mapped[str | None] = mapped_column(String(128))
+    last_audit_head_hash: Mapped[str | None] = mapped_column(String(128))
     offline_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
