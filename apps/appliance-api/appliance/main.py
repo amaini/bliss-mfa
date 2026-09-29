@@ -11,7 +11,7 @@ from .audit import write_audit
 from .clients import LicenseAgentClient, MultiOtpClient
 from .config import get_settings
 from .db import Base, engine, get_db
-from .models import AdminRole, AuditEvent, LocalAdmin, MfaUser, UserStatus
+from .models import AdminRole, AuditEvent, LocalAdmin, MfaUser, UserStatus, event_digest
 from .schemas import (
     AdminCreate,
     AdminRead,
@@ -497,6 +497,38 @@ def audit(
     return list(
         db.scalars(select(AuditEvent).order_by(AuditEvent.created_at.desc()).limit(limit))
     )
+
+
+@app.get("/v1/audit/integrity")
+def audit_integrity(
+    _: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    events = list(db.scalars(select(AuditEvent).order_by(AuditEvent.created_at.asc())))
+    previous_hash = None
+    for index, event in enumerate(events):
+        expected = event_digest(
+            actor_id=event.actor_id,
+            action=event.action,
+            subject_type=event.subject_type,
+            subject_id=event.subject_id,
+            reason=event.reason,
+            success=event.success,
+            previous_hash=previous_hash,
+            created_at=event.created_at,
+        )
+        if event.previous_hash != previous_hash or event.event_hash != expected:
+            return {
+                "valid": False,
+                "events_checked": index,
+                "failed_event_id": event.id,
+            }
+        previous_hash = event.event_hash
+    return {
+        "valid": True,
+        "events_checked": len(events),
+        "head_hash": previous_hash,
+    }
 
 
 @app.get("/v1/license/status")
