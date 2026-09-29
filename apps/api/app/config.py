@@ -19,6 +19,8 @@ class Settings(BaseSettings):
 
     multiotp_mode: str = "mock"
     multiotp_base_url: str | None = None
+    multiotp_adapter_url: str | None = None
+    multiotp_adapter_token: str | None = None
     multiotp_api_username: str | None = None
     multiotp_api_password: str | None = None
 
