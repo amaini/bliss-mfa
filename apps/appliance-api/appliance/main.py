@@ -610,6 +610,16 @@ def license_offline_apply(
         raise HTTPException(status_code=502, detail="Offline activation failed") from exc
 
 
+@app.post("/v1/license/offline/release-code")
+def license_offline_release_code(
+    _: Principal = Depends(require_owner),
+) -> dict[str, str]:
+    try:
+        return {"release_code": license_agent().offline_release_code()}
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="Offline release failed") from exc
+
+
 @app.post("/v1/license/heartbeat")
 def license_heartbeat(
     _: Principal = Depends(require_admin),
