@@ -5,7 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .db import Base, engine
+from .routes.audit import router as audit_router
 from .routes.billing import router as billing_router
+from .routes.dashboard import router as dashboard_router
 from .routes.enrollments import router as enrollments_router
 from .routes.organizations import router as organizations_router
 from .routes.users import router as users_router
@@ -35,6 +37,8 @@ app.add_middleware(
 app.include_router(organizations_router, prefix="/v1")
 app.include_router(enrollments_router, prefix="/v1")
 app.include_router(billing_router, prefix="/v1")
+app.include_router(audit_router, prefix="/v1")
+app.include_router(dashboard_router, prefix="/v1")
 app.include_router(users_router, prefix="/v1")
 
 
