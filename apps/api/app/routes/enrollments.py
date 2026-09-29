@@ -26,7 +26,7 @@ from ..schemas import (
     EnrollmentVerifyRequest,
     RevokeDeviceRequest,
 )
-from ..auth import Principal, require_staff_principal
+from ..authorization import OrganizationAccess, require_org_manage
 
 
 router = APIRouter(tags=["enrollment"])
@@ -57,7 +57,7 @@ def start_enrollment(
     organization_id: str,
     user_id: str,
     request: Request,
-    principal: Principal = Depends(require_staff_principal),
+    access: OrganizationAccess = Depends(require_org_manage),
     db: Session = Depends(get_db),
     adapter: MultiOtpAdapter = Depends(get_multiotp_adapter),
 ) -> EnrollmentStartRead:
@@ -88,7 +88,7 @@ def start_enrollment(
     write_audit(
         db,
         organization_id=organization_id,
-        actor_id=principal.actor_id,
+        actor_id=access.actor_id,
         action="mfa.enrollment.started",
         subject_type="mfa_user",
         subject_id=user.id,
@@ -175,7 +175,7 @@ def revoke_user_token(
     user_id: str,
     payload: RevokeDeviceRequest,
     request: Request,
-    principal: Principal = Depends(require_staff_principal),
+    access: OrganizationAccess = Depends(require_org_manage),
     db: Session = Depends(get_db),
     adapter: MultiOtpAdapter = Depends(get_multiotp_adapter),
 ) -> None:
@@ -199,7 +199,7 @@ def revoke_user_token(
     write_audit(
         db,
         organization_id=organization_id,
-        actor_id=principal.actor_id,
+        actor_id=access.actor_id,
         action="mfa.device.revoked",
         subject_type="mfa_user",
         subject_id=user.id,
