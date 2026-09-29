@@ -24,6 +24,40 @@ services:
       timeout: 5s
       retries: 10
 
+  api:
+    build:
+      context: ./apps/api
+    environment:
+      APP_ENV: development
+      DATABASE_URL: postgresql+psycopg://bliss_mfa:local-development-only@postgres:5432/bliss_mfa
+      REDIS_URL: redis://redis:6379/0
+      PORTAL_BASE_URL: http://localhost:3000
+      ALLOWED_ORIGINS: http://localhost:3000
+      MULTIOTP_MODE: mock
+      BLISS_BOOTSTRAP_API_KEY: local-development-key
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_STARTER: ${STRIPE_PRICE_STARTER:-}
+      STRIPE_PRICE_BUSINESS: ${STRIPE_PRICE_BUSINESS:-}
+      STRIPE_PRICE_BUSINESS_PLUS: ${STRIPE_PRICE_BUSINESS_PLUS:-}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  portal:
+    build:
+      context: ./apps/portal
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
 volumes:
   postgres_data:
   redis_data:
