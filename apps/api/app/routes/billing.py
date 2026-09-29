@@ -14,8 +14,12 @@ from ..billing import (
 from ..config import get_settings
 from ..db import get_db
 from ..models import (
+    MembershipRole,
     Organization,
+    OrganizationMembership,
     PendingSignup,
+    PortalUser,
+    PortalUserStatus,
     SignupStatus,
     StripeWebhookEvent,
     Subscription,
@@ -168,6 +172,23 @@ def complete_onboarding(
         status=SubscriptionStatus.active,
     )
     db.add(subscription)
+
+    portal_user = db.scalar(select(PortalUser).where(PortalUser.email == signup.email.lower()))
+    if not portal_user:
+        portal_user = PortalUser(
+            email=signup.email.lower(),
+            status=PortalUserStatus.invited,
+        )
+        db.add(portal_user)
+        db.flush()
+
+    membership = OrganizationMembership(
+        organization_id=organization.id,
+        portal_user_id=portal_user.id,
+        role=MembershipRole.customer_admin,
+    )
+    db.add(membership)
+
     signup.status = SignupStatus.completed
     db.commit()
 
