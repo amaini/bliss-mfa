@@ -96,6 +96,7 @@ class LicenseAgentClient:
         response = httpx.post(
             f"{self.base_url}/v1/activate/online",
             json={"activation_code": code},
+            headers=self._headers(),
             timeout=20,
         )
         response.raise_for_status()
@@ -105,6 +106,7 @@ class LicenseAgentClient:
         response = httpx.post(
             f"{self.base_url}/v1/offline/request",
             json={"activation_code": code},
+            headers=self._headers(),
             timeout=10,
         )
         response.raise_for_status()
@@ -114,6 +116,7 @@ class LicenseAgentClient:
         response = httpx.post(
             f"{self.base_url}/v1/offline/apply",
             json={"activation_response": response_code},
+            headers=self._headers(),
             timeout=10,
         )
         response.raise_for_status()
@@ -123,6 +126,7 @@ class LicenseAgentClient:
         response = httpx.post(
             f"{self.base_url}/v1/heartbeat",
             json={"protected_rdp_users": seats, "audit_head_hash": audit_head_hash},
+            headers=self._headers(),
             timeout=20,
         )
         response.raise_for_status()
@@ -131,16 +135,16 @@ class LicenseAgentClient:
 
 
     def offline_release_code(self) -> str:
-        response = httpx.post(f"{self.base_url}/v1/offline/release-code", timeout=10)
+        response = httpx.post(f"{self.base_url}/v1/offline/release-code", headers=self._headers(), timeout=10)
         response.raise_for_status()
         return str(response.json()["release_code"])
 
     def billing_portal(self) -> str:
-        response = httpx.post(f"{self.base_url}/v1/billing/portal", timeout=20)
+        response = httpx.post(f"{self.base_url}/v1/billing/portal", headers=self._headers(), timeout=20)
         response.raise_for_status()
         return str(response.json()["url"])
 
     def release(self) -> dict:
-        response = httpx.post(f"{self.base_url}/v1/release", timeout=20)
+        response = httpx.post(f"{self.base_url}/v1/release", headers=self._headers(), timeout=20)
         response.raise_for_status()
         return response.json()
