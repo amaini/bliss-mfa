@@ -1,62 +1,75 @@
 # Bliss Secure MFA
 
-Private management and billing platform for Bliss IT Solutions' managed multi-factor authentication service.
+Bliss Secure MFA is an on-premise MFA appliance for Windows RDP and other
+business access protected through multiOTP / FreeRADIUS.
 
-## Architecture
+The customer runs and manages the MFA control plane inside its own environment.
+Bliss centrally provides licensing, billing, updates and support.
 
-This repository contains the customer/admin portal, management API, multiOTP adapter, billing integration, and deployment assets for **Bliss Secure MFA**.
-
-The authentication engine itself remains isolated in `amaini/multiotp_Bliss`.
+## Current product architecture
 
 ```text
-blissitek.ca/managed-mfa
-        |
-   Stripe Checkout
-        |
-        v
-mfa.blissitek.ca
-  Bliss MFA Portal
-        |
-        v
-   Management API
-        |
-        +--> PostgreSQL (tenants, RBAC, billing, audit)
-        |
-        v
- multiOTP Adapter
-        |
-        v
-   multiOTP / RADIUS
+CUSTOMER OFFICE
++-----------------------------------------------+
+| Local portal                                  |
+|   -> Appliance API                            |
+|      -> License Agent                         |
+|      -> multiOTP Adapter -> multiOTP/RADIUS   |
+|                                               |
+| MFA secrets, QR data, users and auth traffic  |
+| remain local.                                 |
++----------------------+------------------------+
+                       |
+                       | licensing / billing only
+                       v
+              license.blissitek.ca
+              +-------------------+
+              | entitlement       |
+              | installation bind |
+              | signed leases     |
+              | Stripe portal     |
+              +-------------------+
 ```
+
+## Licensing model
+
+- One license is bound to one cryptographic installation identity.
+- Normal online installations activate once and renew short-lived signed leases
+  through challenge/response heartbeat.
+- RDP licensing is per distinct protected RDP user, not per concurrent session.
+- Seat limits are enforced by the local backend and license agent.
+- Offline / air-gapped installations use annual prepaid signed licenses and a
+  simple installation-code / activation-response flow.
+- License expiry restricts commercial management operations but does not
+  automatically disable already-working RDP authentication.
+- A license must be released before normal transfer to another appliance.
+- Bliss can force-release a failed installation from the central control plane.
+
+## Repository layout
+
+- `apps/appliance-api` — customer-local management API.
+- `apps/appliance-portal` — customer-local management UI.
+- `services/license-agent` — local device identity, lease validation and seat gate.
+- `services/multiotp-adapter` — narrow allow-listed multiOTP integration.
+- `apps/license-server` — Bliss central licensing and billing control plane.
+- `website/managed-mfa` — product-page source.
+- `apps/api` and `apps/portal` — earlier multi-tenant hosted-control-plane prototype;
+  retained temporarily while the appliance migration is completed.
 
 ## Security principles
 
-- multiOTP owns MFA secrets.
-- The portal database must not persist TOTP seeds, QR provisioning secrets, or raw authenticator secrets.
-- No arbitrary shell-command execution is exposed through the management API.
-- Every privileged MFA lifecycle action is auditable.
-- Tenant boundaries are enforced server-side.
-- Stripe controls commercial entitlement, not authentication state directly.
-- Payment failure must never immediately lock an organization out of MFA.
+- multiOTP owns OTP secret material.
+- Bliss licensing does not need usernames, OTP seeds, passwords or RADIUS traffic.
+- The local portal never exposes arbitrary shell execution.
+- Privileged local operations are role-gated and written to a hash-chained audit log.
+- License leases are signed by Bliss and bound to a device-generated keypair.
+- The Bliss signing private key never belongs on a customer appliance.
+- Existing authentication is not intentionally shut down solely because a payment
+  method expired.
 
-## Planned applications
+## Status
 
-- `apps/portal` — customer and technician web portal.
-- `apps/api` — management API.
-- `services/multiotp-adapter` — constrained integration with multiOTP.
-- `deployment` — Docker and production deployment definitions.
-- `docs` — architecture, security, integration, and roadmap documentation.
-
-## Initial milestone
-
-Phase 0 establishes:
-
-1. Repository foundation.
-2. Architecture and security model.
-3. multiOTP API capability discovery.
-4. Tenant/RBAC model.
-5. Enrollment and recovery state machines.
-6. Stripe subscription architecture.
-7. Local Docker development baseline.
-
-No production deployment or authentication-engine mutation is part of Phase 0.
+The repository now contains the appliance/control-plane implementation
+foundation. Production deployment still requires real multiOTP compatibility
+testing, signing-key provisioning, TLS, database migrations, CI execution and
+Stripe production configuration.
