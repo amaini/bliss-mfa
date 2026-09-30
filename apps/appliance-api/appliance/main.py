@@ -118,13 +118,23 @@ def user_or_404(db: Session, user_id: str) -> MfaUser:
     return user
 
 
-def ensure_seat(db: Session, delta: int = 1) -> None:
+def reserve_user_seat(username: str) -> dict:
     try:
-        result = license_agent().authorize_seat(protected_seat_count(db), delta)
-    except httpx.HTTPError as exc:
+        result = license_agent().reserve_seat(username)
+    except (httpx.HTTPError, RuntimeError) as exc:
         raise HTTPException(status_code=503, detail="License agent unavailable") from exc
     if not result["allowed"]:
         raise HTTPException(status_code=403, detail=result.get("reason") or "License denied")
+    return result
+
+
+def release_user_seat_best_effort(username: str) -> None:
+    try:
+        license_agent().release_seat(username)
+    except (httpx.HTTPError, RuntimeError):
+        # Never prevent offboarding because the local licensing service is
+        # temporarily unavailable. A stale reservation only over-enforces seats.
+        pass
 
 
 @app.get("/health")
@@ -278,11 +288,13 @@ def create_user(
     if db.scalar(select(MfaUser).where(MfaUser.username == payload.username)):
         raise HTTPException(status_code=409, detail="User already exists")
 
-    ensure_seat(db)
+    seat = reserve_user_seat(payload.username)
 
     try:
         multiotp().create_user(payload.username)
     except (httpx.HTTPError, RuntimeError) as exc:
+        if not seat.get("already_reserved"):
+            release_user_seat_best_effort(payload.username)
         raise HTTPException(status_code=502, detail="Unable to create user in MFA engine") from exc
 
     user = MfaUser(
@@ -379,16 +391,23 @@ def reason_command(
     requires_seat: bool = False,
 ) -> MfaUser:
     user = user_or_404(db, user_id)
+    seat = None
     if requires_seat and user.protected_rdp and user.status in {UserStatus.disabled, UserStatus.revoked}:
-        ensure_seat(db)
+        seat = reserve_user_seat(user.username)
     try:
         ok = multiotp().command(user.engine_username, command)
     except (httpx.HTTPError, RuntimeError) as exc:
+        if seat and not seat.get("already_reserved"):
+            release_user_seat_best_effort(user.username)
         raise HTTPException(status_code=502, detail="MFA engine command failed") from exc
     if not ok:
         raise HTTPException(status_code=409, detail="MFA engine rejected the command")
+    if not ok and seat and not seat.get("already_reserved"):
+        release_user_seat_best_effort(user.username)
     if new_status:
         user.status = new_status
+    if new_status in {UserStatus.disabled, UserStatus.revoked} and user.protected_rdp:
+        release_user_seat_best_effort(user.username)
     write_audit(
         db,
         actor_id=principal.id,
@@ -511,6 +530,8 @@ def delete_user(
         raise HTTPException(status_code=502, detail="MFA engine delete failed") from exc
     if not ok:
         raise HTTPException(status_code=409, detail="MFA engine rejected deletion")
+    if user.protected_rdp:
+        release_user_seat_best_effort(user.username)
     db.delete(user)
     write_audit(
         db,
