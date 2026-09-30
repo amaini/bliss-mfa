@@ -406,8 +406,9 @@ def reason_command(
         raise HTTPException(status_code=409, detail="MFA engine rejected the command")
     if new_status:
         user.status = new_status
-    if new_status in {UserStatus.disabled, UserStatus.revoked} and user.protected_rdp:
-        release_user_seat_best_effort(user.username)
+    release_after_commit = (
+        new_status in {UserStatus.disabled, UserStatus.revoked} and user.protected_rdp
+    )
     write_audit(
         db,
         actor_id=principal.id,
@@ -419,6 +420,8 @@ def reason_command(
     )
     db.commit()
     db.refresh(user)
+    if release_after_commit:
+        release_user_seat_best_effort(user.username)
     return user
 
 
@@ -530,8 +533,8 @@ def delete_user(
         raise HTTPException(status_code=502, detail="MFA engine delete failed") from exc
     if not ok:
         raise HTTPException(status_code=409, detail="MFA engine rejected deletion")
-    if user.protected_rdp:
-        release_user_seat_best_effort(user.username)
+    release_after_commit = user.protected_rdp
+    username_for_release = user.username
     db.delete(user)
     write_audit(
         db,
@@ -543,6 +546,8 @@ def delete_user(
         source_ip=request.client.host if request.client else None,
     )
     db.commit()
+    if release_after_commit:
+        release_user_seat_best_effort(username_for_release)
 
 
 @app.get("/v1/audit", response_model=list[AuditRead])
