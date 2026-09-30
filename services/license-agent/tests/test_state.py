@@ -155,3 +155,36 @@ def test_restricted_license_cannot_reserve_new_seat(tmp_path, monkeypatch):
     denied = state.reserve_seat("newuser")
     assert denied["allowed"] is False
     assert "does not allow" in denied["reason"]
+
+
+
+def test_offline_release_code_can_be_recovered(tmp_path, monkeypatch):
+    signing_key = Ed25519PrivateKey.generate()
+    public_pem = signing_key.public_key().public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode()
+    monkeypatch.setenv("BLISS_SIGNING_PUBLIC_KEY_PEM", public_pem)
+    get_settings.cache_clear()
+
+    state = LicenseState(str(tmp_path))
+    now = datetime.now(timezone.utc)
+    payload = {
+        "v": 1,
+        "license_id": "lic_offline_release",
+        "license_type": "offline",
+        "installation_id": state.installation_id(),
+        "state": "active",
+        "max_rdp_users": 5,
+        "issued_at": now.isoformat(),
+        "lease_expires_at": (now + timedelta(days=365)).isoformat(),
+        "grace_expires_at": None,
+        "features": {"rdp_mfa": True},
+    }
+    state.save_lease(make_lease(signing_key, payload))
+
+    first = state.create_offline_release_code()
+    second = state.create_offline_release_code()
+
+    assert first == second
+    assert state.effective_status()["state"] == "unlicensed"
