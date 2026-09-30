@@ -12,6 +12,11 @@ $settings=Get-ItemProperty $key
 $current=[Security.Principal.WindowsIdentity]::GetCurrent().Name
 if ($settings.excluded_account -ne $current) { throw 'Existing administrator recovery exception is missing.' }
 if ($settings.multiOTPCacheEnabled -ne 0) { throw 'Offline caching must be disabled.' }
+# The administrator's normal desktop token can read only the enrollment page;
+# engine state and configuration continue to require elevation.
+$sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+& icacls.exe 'C:\BlissMFA\Prototype-Enrollment.html' /grant:r ('*'+$sid+':R') | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Could not grant operator access to enrollment page.' }
 # Local console and CredUI keep their normal sign-in path. RDP requires this provider.
 Set-ItemProperty $key -Name cpus_logon -Value '1e'
 Set-ItemProperty $key -Name cpus_unlock -Value '1e'
