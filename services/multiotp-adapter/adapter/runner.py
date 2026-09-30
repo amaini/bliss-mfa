@@ -6,7 +6,6 @@ from dataclasses import dataclass
 
 from .config import get_settings
 
-
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_.:@-]{1,255}$")
 OTP_RE = re.compile(r"^[0-9]{4,16}$")
 
@@ -27,6 +26,7 @@ class CommandResult:
     returncode: int
     stdout: str
     stderr: str
+    authentication_disabled: bool = False
 
 
 def validate_username(username: str) -> str:
@@ -95,7 +95,19 @@ class MultiOtpCliRunner:
         )
 
     def revoke_token(self, username: str) -> CommandResult:
-        return self.run("-remove-token", validate_username(username))
+        username = validate_username(username)
+        disabled = self.disable(username)
+        if disabled.returncode != 11:
+            return disabled
+        # Rotating a seed is not enough to revoke access. Keep the identity
+        # disabled even if removal fails or times out after a partial mutation.
+        try:
+            removed = self.run("-remove-token", username)
+        except (OSError, subprocess.TimeoutExpired):
+            return CommandResult(99, "", "", authentication_disabled=True)
+        return CommandResult(
+            removed.returncode, removed.stdout, removed.stderr, authentication_disabled=True,
+        )
 
     def delete_user(self, username: str) -> CommandResult:
         return self.run("-delete", validate_username(username))
