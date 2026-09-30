@@ -7,6 +7,25 @@ import httpx
 from .config import get_settings
 
 
+class AdapterOperationError(RuntimeError):
+    def __init__(self, *, authentication_disabled: bool = False) -> None:
+        super().__init__("MFA engine rejected the operation")
+        self.authentication_disabled = authentication_disabled
+
+
+def operation_ok(response: httpx.Response) -> bool:
+    response.raise_for_status()
+    try:
+        body = response.json()
+    except ValueError as exc:
+        raise RuntimeError("Invalid MFA engine response") from exc
+    if not isinstance(body, dict) or type(body.get("ok")) is not bool:
+        raise RuntimeError("Invalid MFA engine operation result")
+    if not body["ok"] and body.get("authentication_disabled") is True:
+        raise AdapterOperationError(authentication_disabled=True)
+    return body["ok"]
+
+
 class MultiOtpClient:
     def __init__(self) -> None:
         settings = get_settings()
@@ -25,7 +44,8 @@ class MultiOtpClient:
             headers=self._headers(),
             timeout=15,
         )
-        response.raise_for_status()
+        if not operation_ok(response):
+            raise AdapterOperationError()
 
     def provisioning_uri(self, username: str) -> str:
         response = httpx.get(
@@ -43,8 +63,7 @@ class MultiOtpClient:
             headers=self._headers(),
             timeout=15,
         )
-        response.raise_for_status()
-        return bool(response.json()["ok"])
+        return operation_ok(response)
 
     def command(self, username: str, command: str, payload: dict | None = None) -> bool:
         response = httpx.post(
@@ -53,8 +72,7 @@ class MultiOtpClient:
             headers=self._headers(),
             timeout=15,
         )
-        response.raise_for_status()
-        return bool(response.json()["ok"])
+        return operation_ok(response)
 
     def delete_user(self, username: str) -> bool:
         response = httpx.delete(
@@ -62,8 +80,7 @@ class MultiOtpClient:
             headers=self._headers(),
             timeout=15,
         )
-        response.raise_for_status()
-        return bool(response.json()["ok"])
+        return operation_ok(response)
 
 
 class LicenseAgentClient:

@@ -7,7 +7,6 @@ import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from fastapi import Depends, Header, HTTPException
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .config import get_settings

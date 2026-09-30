@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .audit import write_audit
-from .clients import LicenseAgentClient, MultiOtpClient
+from .clients import AdapterOperationError, LicenseAgentClient, MultiOtpClient
 from .config import get_settings
 from .db import Base, SessionLocal, engine, get_db
 from .models import AdminRole, AuditEvent, LocalAdmin, MfaUser, UserStatus, event_digest
@@ -39,7 +39,6 @@ from .security import (
     require_owner,
     verify_password,
 )
-
 
 settings = get_settings()
 scheduler = BackgroundScheduler(daemon=True)
@@ -295,6 +294,12 @@ def create_user(
     except (httpx.HTTPError, RuntimeError) as exc:
         if not seat.get("already_reserved"):
             release_user_seat_best_effort(payload.username)
+        write_audit(
+            db, actor_id=principal.id, action="mfa.user.create_failed",
+            subject_type="mfa_user", subject_id=payload.username, success=False,
+            source_ip=request.client.host if request.client else None,
+        )
+        db.commit()
         raise HTTPException(status_code=502, detail="Unable to create user in MFA engine") from exc
 
     user = MfaUser(
@@ -391,11 +396,29 @@ def reason_command(
     requires_seat: bool = False,
 ) -> MfaUser:
     user = user_or_404(db, user_id)
+    if command != "revoke" and user.status == UserStatus.revoked:
+        raise HTTPException(status_code=409, detail="Revoked users must be deleted and enrolled again")
+    if command == "unlock" and user.status in {UserStatus.disabled, UserStatus.pending}:
+        raise HTTPException(status_code=409, detail="Only enrolled, enabled users may be unlocked")
     seat = None
     if requires_seat and user.protected_rdp and user.status in {UserStatus.disabled, UserStatus.revoked}:
         seat = reserve_user_seat(user.username)
     try:
         ok = multiotp().command(user.engine_username, command)
+    except AdapterOperationError as exc:
+        if exc.authentication_disabled:
+            # A failed revoke can already have disabled the engine identity.
+            # Revoke remains closed to enable/unlock even if rotation failed.
+            user.status = UserStatus.revoked if command == "revoke" else UserStatus.disabled
+        write_audit(
+            db, actor_id=principal.id, action=action + "_failed", subject_type="mfa_user",
+            subject_id=user.id, reason=payload.reason, success=False,
+            source_ip=request.client.host if request.client else None,
+        )
+        db.commit()
+        if exc.authentication_disabled and user.protected_rdp:
+            release_user_seat_best_effort(user.username)
+        raise HTTPException(status_code=409, detail="MFA engine command failed; authentication is disabled") from exc
     except (httpx.HTTPError, RuntimeError) as exc:
         if seat and not seat.get("already_reserved"):
             release_user_seat_best_effort(user.username)

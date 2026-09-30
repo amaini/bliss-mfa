@@ -5,7 +5,6 @@ from .runner import AdapterInputError, MultiOtpCliRunner
 from .schemas import CommandResponse, OtpVerify, ProvisioningResponse, ResyncRequest, UserCreate
 from .security import require_internal_auth
 
-
 app = FastAPI(title="Bliss multiOTP Adapter", version="0.1.0")
 runner = MultiOtpCliRunner()
 
@@ -18,8 +17,19 @@ def require_writes_enabled() -> None:
         )
 
 
-def command_response(returncode: int) -> CommandResponse:
-    return CommandResponse(ok=returncode == 0, returncode=returncode)
+SUCCESS_CODES = {
+    "create": {11}, "list": {19}, "provisioning": {17}, "verify": {0},
+    "unlock": {11}, "disable": {11}, "enable": {11}, "resync": {14},
+    "revoke": {19}, "delete": {12, 21},
+}
+
+
+def command_response(operation: str, returncode: int, *, authentication_disabled: bool = False) -> CommandResponse:
+    # Missing-user deletion is idempotent: the required postcondition is absence.
+    return CommandResponse(
+        ok=returncode in SUCCESS_CODES[operation], returncode=returncode,
+        authentication_disabled=authentication_disabled,
+    )
 
 
 @app.get("/health")
@@ -30,7 +40,7 @@ def health() -> dict[str, str]:
 @app.get("/v1/users", dependencies=[Depends(require_internal_auth)])
 def list_users() -> dict[str, list[str]]:
     result = runner.users_list()
-    if result.returncode != 0:
+    if result.returncode not in SUCCESS_CODES["list"]:
         raise HTTPException(status_code=502, detail="multiOTP users list failed")
     users = [line.strip() for line in result.stdout.splitlines() if line.strip()]
     return {"users": users}
@@ -46,7 +56,7 @@ def create_user(payload: UserCreate) -> CommandResponse:
         result = runner.create_totp_user(payload.username)
     except AdapterInputError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return command_response(result.returncode)
+    return command_response("create", result.returncode)
 
 
 @app.get(
@@ -59,7 +69,7 @@ def provisioning(username: str) -> ProvisioningResponse:
         result = runner.provisioning_url(username)
     except AdapterInputError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    if result.returncode != 0:
+    if result.returncode not in SUCCESS_CODES["provisioning"]:
         raise HTTPException(status_code=502, detail="multiOTP provisioning failed")
 
     uri = result.stdout.strip()
@@ -78,7 +88,7 @@ def verify(username: str, payload: OtpVerify) -> CommandResponse:
         result = runner.verify(username, payload.otp)
     except AdapterInputError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return command_response(result.returncode)
+    return command_response("verify", result.returncode)
 
 
 @app.post(
@@ -87,7 +97,7 @@ def verify(username: str, payload: OtpVerify) -> CommandResponse:
     dependencies=[Depends(require_internal_auth), Depends(require_writes_enabled)],
 )
 def unlock(username: str) -> CommandResponse:
-    return command_response(runner.unlock(username).returncode)
+    return command_response("unlock", runner.unlock(username).returncode)
 
 
 @app.post(
@@ -96,7 +106,7 @@ def unlock(username: str) -> CommandResponse:
     dependencies=[Depends(require_internal_auth), Depends(require_writes_enabled)],
 )
 def disable(username: str) -> CommandResponse:
-    return command_response(runner.disable(username).returncode)
+    return command_response("disable", runner.disable(username).returncode)
 
 
 @app.post(
@@ -105,7 +115,7 @@ def disable(username: str) -> CommandResponse:
     dependencies=[Depends(require_internal_auth), Depends(require_writes_enabled)],
 )
 def enable(username: str) -> CommandResponse:
-    return command_response(runner.enable(username).returncode)
+    return command_response("enable", runner.enable(username).returncode)
 
 
 @app.post(
@@ -115,7 +125,7 @@ def enable(username: str) -> CommandResponse:
 )
 def resync(username: str, payload: ResyncRequest) -> CommandResponse:
     result = runner.resync(username, payload.otp1, payload.otp2)
-    return command_response(result.returncode)
+    return command_response("resync", result.returncode)
 
 
 @app.post(
@@ -124,7 +134,10 @@ def resync(username: str, payload: ResyncRequest) -> CommandResponse:
     dependencies=[Depends(require_internal_auth), Depends(require_writes_enabled)],
 )
 def revoke(username: str) -> CommandResponse:
-    return command_response(runner.revoke_token(username).returncode)
+    result = runner.revoke_token(username)
+    return command_response(
+        "revoke", result.returncode, authentication_disabled=result.authentication_disabled,
+    )
 
 
 @app.delete(
@@ -133,4 +146,4 @@ def revoke(username: str) -> CommandResponse:
     dependencies=[Depends(require_internal_auth), Depends(require_writes_enabled)],
 )
 def delete_user(username: str) -> CommandResponse:
-    return command_response(runner.delete_user(username).returncode)
+    return command_response("delete", runner.delete_user(username).returncode)

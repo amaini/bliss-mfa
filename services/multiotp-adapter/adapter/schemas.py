@@ -17,6 +17,7 @@ class ResyncRequest(BaseModel):
 class CommandResponse(BaseModel):
     ok: bool
     returncode: int
+    authentication_disabled: bool = False
 
 
 class ProvisioningResponse(BaseModel):
