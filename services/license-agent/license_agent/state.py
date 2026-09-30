@@ -136,6 +136,14 @@ class LicenseState:
 
     def create_offline_release_code(self) -> str:
         token = self.load_lease()
+        if not token and self.release_tombstone_path.exists():
+            try:
+                tombstone = json.loads(self.release_tombstone_path.read_text())
+                saved_code = tombstone.get("release_code")
+                if saved_code:
+                    return str(saved_code)
+            except json.JSONDecodeError:
+                raise ValueError("Local release state is invalid")
         if not token:
             raise ValueError("No license is installed")
         payload = self.verify_lease(token)
@@ -158,6 +166,7 @@ class LicenseState:
             {
                 "license_id": payload["license_id"],
                 "released_at": utcnow().isoformat(),
+                "release_code": code,
             },
         )
         self.clear_lease()
