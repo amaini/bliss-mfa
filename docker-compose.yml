@@ -1,0 +1,88 @@
+# Development appliance stack.
+#
+# Before first run:
+#   python scripts/generate-license-keys.py
+#
+# Production must replace development secrets, use the real multiOTP adapter,
+# use TLS and keep the Bliss private signing key only on Bliss infrastructure.
+
+services:
+  license-server:
+    build:
+      context: ./apps/license-server
+    environment:
+      APP_ENV: development
+      DATABASE_URL: sqlite+pysqlite:////var/lib/bliss-license/licenses.db
+      ADMIN_API_KEY: local-license-admin
+      SIGNING_PRIVATE_KEY_FILE: /run/bliss-keys/license-private.pem
+      ONLINE_LEASE_DAYS: 14
+      ONLINE_GRACE_DAYS: 30
+      OFFLINE_DEFAULT_DAYS: 365
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_RETURN_URL: http://127.0.0.1:9443/license
+    volumes:
+      - license_server_data:/var/lib/bliss-license
+      - ./.local/license-keys:/run/bliss-keys:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  multiotp-mock:
+    build:
+      context: ./services/multiotp-mock
+    expose:
+      - "8090"
+
+  license-agent:
+    build:
+      context: ./services/license-agent
+    environment:
+      LICENSE_SERVER_URL: http://license-server:8080
+      STATE_DIR: /var/lib/bliss-mfa/license
+      BLISS_SIGNING_PUBLIC_KEY_FILE: /run/bliss-keys/license-public.pem
+      SOFTWARE_VERSION: 0.1.0-dev
+      AGENT_SHARED_TOKEN: local-license-agent-token
+    volumes:
+      - license_agent_data:/var/lib/bliss-mfa/license
+      - ./.local/license-keys:/run/bliss-keys:ro
+    expose:
+      - "8091"
+    depends_on:
+      - license-server
+
+  appliance-api:
+    build:
+      context: ./apps/appliance-api
+    environment:
+      APP_ENV: development
+      DATABASE_URL: sqlite+pysqlite:////var/lib/bliss-mfa/appliance.db
+      JWT_SECRET: local-development-jwt-change-me
+      SETUP_TOKEN: local-first-owner-setup
+      COMPANY_NAME: Development Office
+      MULTIOTP_ADAPTER_URL: http://multiotp-mock:8090
+      MULTIOTP_ADAPTER_TOKEN: local-adapter-token
+      LICENSE_AGENT_URL: http://license-agent:8091
+      LICENSE_AGENT_TOKEN: local-license-agent-token
+      LOCAL_PORTAL_URL: http://127.0.0.1:9443
+    volumes:
+      - appliance_data:/var/lib/bliss-mfa
+    expose:
+      - "8000"
+    depends_on:
+      - license-agent
+      - multiotp-mock
+
+  appliance-portal:
+    build:
+      context: ./apps/appliance-portal
+    environment:
+      APPLIANCE_API_URL: http://appliance-api:8000
+      PORTAL_PUBLIC_URL: http://127.0.0.1:9443
+    ports:
+      - "127.0.0.1:9443:3000"
+    depends_on:
+      - appliance-api
+
+volumes:
+  license_server_data:
+  license_agent_data:
+  appliance_data:

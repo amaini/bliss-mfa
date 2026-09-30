@@ -1,0 +1,166 @@
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
+
+class OrganizationCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=200)
+    slug: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{1,98}[a-z0-9]$")
+    seat_limit: int = Field(default=10, ge=1, le=10000)
+
+
+class OrganizationRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    slug: str
+    status: str
+    seat_limit: int
+    created_at: datetime
+
+
+class MfaUserCreate(BaseModel):
+    username: str = Field(min_length=1, max_length=255)
+    display_name: str | None = Field(default=None, max_length=255)
+    email: EmailStr | None = None
+
+
+class MfaUserRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    organization_id: str
+    username: str
+    display_name: str | None
+    email: str | None
+    status: str
+    multiotp_username: str
+    created_at: datetime
+
+
+class EnrollmentStartRead(BaseModel):
+    enrollment_token: str
+    provisioning_uri: str
+    expires_at: datetime
+
+
+class EnrollmentVerifyRequest(BaseModel):
+    enrollment_token: str = Field(min_length=32, max_length=512)
+    otp: str = Field(pattern=r"^\d{6,10}$")
+
+
+class EnrollmentVerifyRead(BaseModel):
+    verified: bool
+    user_id: str
+    device_id: str
+
+
+class RevokeDeviceRequest(BaseModel):
+    reason: str = Field(min_length=3, max_length=1000)
+
+
+class HealthRead(BaseModel):
+    status: str
+    service: str
+
+
+class CheckoutCreateRequest(BaseModel):
+    company_name: str = Field(min_length=2, max_length=200)
+    email: EmailStr
+    plan_code: str = Field(pattern=r"^(starter|business|business_plus)$")
+
+
+class CheckoutCreateRead(BaseModel):
+    checkout_url: str
+    checkout_session_id: str
+
+
+class OnboardingStatusRead(BaseModel):
+    status: str
+    company_name: str
+    email: str
+    plan_code: str
+
+
+class OnboardingCompleteRequest(BaseModel):
+    onboarding_token: str = Field(min_length=32, max_length=512)
+    organization_slug: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{1,98}[a-z0-9]$")
+
+
+class OnboardingCompleteRead(BaseModel):
+    organization_id: str
+    organization_slug: str
+    seat_limit: int
+
+
+class UserActionReason(BaseModel):
+    reason: str = Field(min_length=3, max_length=1000)
+
+
+class UserResyncRequest(BaseModel):
+    otp1: str = Field(pattern=r"^\d{4,16}$")
+    otp2: str = Field(pattern=r"^\d{4,16}$")
+    reason: str = Field(min_length=3, max_length=1000)
+
+
+class UserActionRead(BaseModel):
+    ok: bool
+    status: str
+
+
+class AuditEventRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    organization_id: str
+    actor_type: str
+    actor_id: str | None
+    action: str
+    subject_type: str
+    subject_id: str | None
+    reason: str | None
+    source_ip: str | None
+    success: bool
+    correlation_id: str
+    created_at: datetime
+
+
+class OrganizationStatsRead(BaseModel):
+    organization_id: str
+    total_users: int
+    active_users: int
+    pending_users: int
+    disabled_users: int
+    locked_users: int
+    active_devices: int
+    pending_enrollments: int
+    seat_limit: int
+
+
+class PrincipalRead(BaseModel):
+    subject: str
+    email: str | None
+    groups: list[str]
+
+
+class MembershipCreate(BaseModel):
+    email: EmailStr
+    role: str = Field(pattern=r"^(customer_admin|customer_operator|readonly)$")
+
+
+class MembershipRead(BaseModel):
+    id: str
+    organization_id: str
+    portal_user_id: str
+    email: str
+    role: str
+    status: str
+
+
+class MyOrganizationRead(BaseModel):
+    id: str
+    name: str
+    slug: str
+    role: str
+    seat_limit: int

@@ -1,0 +1,27 @@
+[project]
+name = "bliss-mfa-appliance-api"
+version = "0.1.0"
+description = "Local management API for a Bliss Secure MFA appliance"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.116,<1",
+  "uvicorn[standard]>=0.35,<1",
+  "sqlalchemy>=2.0,<3",
+  "pydantic-settings>=2.10,<3",
+  "email-validator>=2.2,<3",
+  "httpx>=0.28,<1",
+  "PyJWT>=2.10,<3",
+  "argon2-cffi>=25,<26",
+  "apscheduler>=3.11,<4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.4,<9", "ruff>=0.12,<1"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
