@@ -12,6 +12,8 @@ from .schemas import (
     OnlineActivationRequest,
     SeatAuthorizationRequest,
     SeatAuthorizationResponse,
+    SeatIdentityRequest,
+    SeatIdentityResponse,
 )
 from .security import require_local_auth
 from .state import LicenseState
@@ -47,7 +49,7 @@ def activate_online(payload: OnlineActivationRequest) -> dict:
 @app.post("/v1/heartbeat")
 def heartbeat(payload: HeartbeatInput) -> dict:
     try:
-        return client.heartbeat(payload.protected_rdp_users, payload.audit_head_hash)
+        return client.heartbeat(state.seat_count(), payload.audit_head_hash)
     except HTTPError as exc:
         # A failed heartbeat does not erase the last valid signed lease. The
         # effective status endpoint will move through offline_grace/restricted.
@@ -68,6 +70,17 @@ def offline_apply(payload: OfflineResponseApply) -> dict:
         return client.apply_offline_response(payload.activation_response)
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/v1/seats/reserve", response_model=SeatIdentityResponse)
+def reserve_rdp_seat(payload: SeatIdentityRequest) -> SeatIdentityResponse:
+    result = state.reserve_seat(payload.username)
+    return SeatIdentityResponse(**result)
+
+
+@app.post("/v1/seats/release")
+def release_rdp_seat(payload: SeatIdentityRequest) -> dict[str, int]:
+    return {"seat_count": state.release_seat(payload.username)}
 
 
 @app.post("/v1/authorize/rdp-seat", response_model=SeatAuthorizationResponse)
