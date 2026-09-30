@@ -30,6 +30,16 @@ integration first; live domain, email, and payment wiring are deferred.
 
 ## Validation
 
+The first engine prototype is installed on the disposable Windows VM. Its signed
+upstream credential provider uses a patched, certificate-verified native PHP
+client. Twenty-four installed-client lifecycle checks pass, as do actual-default
+client/SID, Windows password, controlled outage, and engine restart checks.
+RDP-only enforcement and the non-admin test account are configured. Interactive
+RDP acceptance is still pending. Automatic startup and authentication after reboot
+pass after removing the scheduled task's default battery restriction. WinRM's
+delayed startup was also disabled; its firewall retains the scoped Tailscale rule.
+See `deployment/engine-auth/FIRST-DEPLOYMENT.md` for the installed layout and recovery.
+
 - 95/95 live lifecycle checks passed through the real engine and four HTTP services.
 - 16/16 loopback UDP PAP RADIUS checks passed after fixing spaced runtime paths.
 - 17/17 native XML-over-HTTPS checks passed, including certificate trust rejection
@@ -39,7 +49,7 @@ integration first; live domain, email, and payment wiring are deferred.
 
 ## Still required
 
-Actual Windows credential-provider/RDP proof, production service supervision,
+Actual interactive Windows credential-provider/RDP proof, production service supervision,
 cross-service operation journaling/crash reconciliation, appliance migrations,
 backup/restore validation, client installation packaging and CA trust setup,
 guided local onboarding, and release signing remain outstanding. Seat transactions
