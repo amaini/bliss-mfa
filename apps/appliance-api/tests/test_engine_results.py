@@ -108,3 +108,28 @@ def test_successful_delete_removes_row_and_releases_seat(isolated_api, monkeypat
     assert client.delete(f"/v1/users/{user_id}?reason=Test%20delete").status_code == 204
     assert db.get(MfaUser, user_id) is None
     assert seats.released == ["disposable"]
+
+
+def test_lock_and_unlock_preserve_seat(isolated_api, monkeypatch):
+    client, db, seats = isolated_api
+    user = MfaUser(username="disposable", engine_username="disposable", status=UserStatus.active)
+    db.add(user)
+    db.commit()
+
+    class Engine:
+        def command(self, username, command):
+            return True
+
+    monkeypatch.setattr(main, "multiotp", Engine)
+    assert client.post(f"/v1/users/{user.id}/lock", json={"reason": "Test lock"}).json()["status"] == "locked"
+    assert client.post(f"/v1/users/{user.id}/unlock", json={"reason": "Test unlock"}).json()["status"] == "active"
+    assert seats.released == []
+
+
+@pytest.mark.parametrize("status", [UserStatus.pending, UserStatus.disabled, UserStatus.revoked])
+def test_lock_rejects_ineligible_user_states(isolated_api, status):
+    client, db, _ = isolated_api
+    user = MfaUser(username="disposable", engine_username="disposable", status=status)
+    db.add(user)
+    db.commit()
+    assert client.post(f"/v1/users/{user.id}/lock", json={"reason": "Test lock"}).status_code == 409

@@ -400,6 +400,8 @@ def reason_command(
         raise HTTPException(status_code=409, detail="Revoked users must be deleted and enrolled again")
     if command == "unlock" and user.status in {UserStatus.disabled, UserStatus.pending}:
         raise HTTPException(status_code=409, detail="Only enrolled, enabled users may be unlocked")
+    if command == "lock" and user.status not in {UserStatus.active, UserStatus.locked}:
+        raise HTTPException(status_code=409, detail="Only enrolled, enabled users may be locked")
     seat = None
     if requires_seat and user.protected_rdp and user.status in {UserStatus.disabled, UserStatus.revoked}:
         seat = reserve_user_seat(user.username)
@@ -489,6 +491,21 @@ def unlock_user(
     return reason_command(
         user_id=user_id, command="unlock", action="mfa.user.unlocked",
         new_status=UserStatus.active, payload=payload, request=request,
+        principal=principal, db=db,
+    )
+
+
+@app.post("/v1/users/{user_id}/lock", response_model=UserRead)
+def lock_user(
+    user_id: str,
+    payload: ReasonRequest,
+    request: Request,
+    principal: Principal = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> MfaUser:
+    return reason_command(
+        user_id=user_id, command="lock", action="mfa.user.locked",
+        new_status=UserStatus.locked, payload=payload, request=request,
         principal=principal, db=db,
     )
 
