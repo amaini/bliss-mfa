@@ -1,0 +1,47 @@
+name: Token lifecycle regression
+
+on:
+  pull_request:
+    paths:
+      - "multiotp.class.php"
+      - "multiotp.php"
+      - "raspberry/boot-part/multiotp-tree/usr/local/bin/multiotp/multiotp.class.php"
+      - "tests/token-lifecycle.php"
+      - ".github/workflows/token-lifecycle.yml"
+  push:
+    paths:
+      - "multiotp.class.php"
+      - "multiotp.php"
+      - "raspberry/boot-part/multiotp-tree/usr/local/bin/multiotp/multiotp.class.php"
+      - "tests/token-lifecycle.php"
+      - ".github/workflows/token-lifecycle.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  lifecycle:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        class:
+          - multiotp.class.php
+          - raspberry/boot-part/multiotp-tree/usr/local/bin/multiotp/multiotp.class.php
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install test runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes php-cli php-mbstring
+      - name: Check PHP syntax
+        run: |
+          php -l multiotp.class.php
+          php -l multiotp.php
+          php -l raspberry/boot-part/multiotp-tree/usr/local/bin/multiotp/multiotp.class.php
+          php -l tests/token-lifecycle.php
+      - name: Run isolated token lifecycle regressions
+        env:
+          TEST_CLASS: ${{ matrix.class }}
+        run: |
+          test_dir="$(mktemp -d)"
+          php tests/token-lifecycle.php "$test_dir/" "$TEST_CLASS"
