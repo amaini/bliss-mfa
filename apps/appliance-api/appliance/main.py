@@ -401,9 +401,9 @@ def reason_command(
             release_user_seat_best_effort(user.username)
         raise HTTPException(status_code=502, detail="MFA engine command failed") from exc
     if not ok:
+        if seat and not seat.get("already_reserved"):
+            release_user_seat_best_effort(user.username)
         raise HTTPException(status_code=409, detail="MFA engine rejected the command")
-    if not ok and seat and not seat.get("already_reserved"):
-        release_user_seat_best_effort(user.username)
     if new_status:
         user.status = new_status
     if new_status in {UserStatus.disabled, UserStatus.revoked} and user.protected_rdp:
