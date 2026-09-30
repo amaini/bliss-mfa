@@ -27,3 +27,14 @@ class HeartbeatInput(BaseModel):
 
 class BillingLinkResponse(BaseModel):
     url: str
+
+
+class SeatIdentityRequest(BaseModel):
+    username: str = Field(pattern=r"^[A-Za-z0-9_.:@-]{1,255}$")
+
+class SeatIdentityResponse(BaseModel):
+    allowed: bool
+    seat_count: int
+    max_rdp_users: int
+    already_reserved: bool = False
+    reason: str | None = None
