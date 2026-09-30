@@ -92,6 +92,26 @@ class LicenseAgentClient:
         response.raise_for_status()
         return response.json()
 
+    def reserve_seat(self, username: str) -> dict:
+        response = httpx.post(
+            f"{self.base_url}/v1/seats/reserve",
+            json={"username": username},
+            headers=self._headers(),
+            timeout=10,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def release_seat(self, username: str) -> int:
+        response = httpx.post(
+            f"{self.base_url}/v1/seats/release",
+            json={"username": username},
+            headers=self._headers(),
+            timeout=10,
+        )
+        response.raise_for_status()
+        return int(response.json()["seat_count"])
+
     def activate_online(self, code: str) -> dict:
         response = httpx.post(
             f"{self.base_url}/v1/activate/online",
