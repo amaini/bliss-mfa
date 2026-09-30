@@ -51,8 +51,8 @@ trust store was not changed. The original PHP and INI files are backed up under
 
 Successful real RDP sign-in is confirmed: the user reported phone OTP acceptance,
 and Windows Security event 4624 records a type-10 logon for `bliss_proto_test`
-at `2026-09-30T22:11:08.7713890Z`. Interactive rejection, reconnect, and unlock
-checks below remain pending.
+at `2026-09-30T22:11:08.7713890Z`. The user also confirmed wrong-password rejection and successful reconnect.
+Interactive bad/empty OTP, replay, and unlock checks below remain pending.
 
 As the existing administrator, open `C:\BlissMFA\Prototype-Enrollment.html` on
 the VM. Scan its QR code, reveal the test Windows password, and connect through

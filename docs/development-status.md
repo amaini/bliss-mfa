@@ -35,7 +35,8 @@ upstream credential provider uses a patched, certificate-verified native PHP
 client. Twenty-four installed-client lifecycle checks pass, as do actual-default
 client/SID, Windows password, controlled outage, and engine restart checks.
 RDP-only enforcement and the non-admin test account are configured. The user confirmed phone OTP acceptance, and Windows Security event 4624
-(type 10) confirms a real RDP logon for the test account. Automatic startup and authentication after reboot
+(type 10) confirms a real RDP logon for the test account. The user also confirmed
+wrong-password rejection and successful reconnect. Automatic startup and authentication after reboot
 pass after removing the scheduled task's default battery restriction. WinRM's
 delayed startup was also disabled; its firewall retains the scoped Tailscale rule.
 See `deployment/engine-auth/FIRST-DEPLOYMENT.md` for the installed layout and recovery.
@@ -49,7 +50,7 @@ See `deployment/engine-auth/FIRST-DEPLOYMENT.md` for the installed layout and re
 
 ## Still required
 
-Interactive negative-code/reconnect/unlock acceptance, production service supervision,
+Interactive bad/empty OTP, replay, and unlock acceptance, production service supervision,
 cross-service operation journaling/crash reconciliation, appliance migrations,
 backup/restore validation, client installation packaging and CA trust setup,
 guided local onboarding, and release signing remain outstanding. Seat transactions
