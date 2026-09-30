@@ -738,8 +738,8 @@ class Multiotp
       // http://phpsecurity.readthedocs.io/en/latest/Transport-Layer-Security-(HTTPS-SSL-and-TLS).html
       $this->_default_ssl_context = array(
           'ssl' => array(
-              'verify_peer'         => false,
-              'verify_peer_name'    => false,
+              'verify_peer'         => true,
+              'verify_peer_name'    => true,
               'disable_compression' => true,
               'ciphers'             => 'ALL!EXPORT!EXPORT40!EXPORT56!aNULL!LOW!RC4'
           )
