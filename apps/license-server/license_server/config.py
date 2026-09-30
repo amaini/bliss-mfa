@@ -20,6 +20,17 @@ class Settings(BaseSettings):
 
     stripe_secret_key: str | None = None
     stripe_return_url: str = "https://license.blissitek.ca/billing/return"
+    stripe_webhook_secret: str | None = None
+    stripe_rdp_price_id: str | None = None
+    customer_portal_url: str = "http://127.0.0.1:8080"
+    customer_session_hours: int = 8
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_starttls: bool = True
+    mail_from: str = "Bliss MFA <noreply@blissitek.ca>"
+    development_mail_dir: str = ".local/mail"
 
 
 @lru_cache

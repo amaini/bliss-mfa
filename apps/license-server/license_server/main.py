@@ -34,10 +34,12 @@ from .schemas import (
     StripeLinkRequest,
 )
 from .security import require_admin
+from .customer_routes import router as customer_router
 
 
 settings = get_settings()
 app = FastAPI(title="Bliss Secure MFA License Server", version="0.1.0")
+app.include_router(customer_router)
 
 
 @app.on_event("startup")
@@ -493,13 +495,18 @@ def billing_portal(
         raise HTTPException(status_code=404, detail="Installation not found")
     if not settings.stripe_secret_key or not license.stripe_customer_id:
         raise HTTPException(status_code=503, detail="Billing portal is not configured")
-
-    stripe.api_key = settings.stripe_secret_key
+    challenge = get_active_challenge(db, payload.installation_id, payload.nonce)
+    verify_installation_signature(license, payload.signature, {
+        "installation_id": payload.installation_id, "nonce": payload.nonce, "action": "billing",
+    })
+    challenge.used_at = utcnow()
+    db.commit()
     session = stripe.billing_portal.Session.create(
         customer=license.stripe_customer_id,
         return_url=settings.stripe_return_url,
+        api_key=settings.stripe_secret_key,
     )
-    return BillingPortalResponse(url=session.url)
+    return BillingPortalResponse(url=session["url"])
 
 
 @app.post(

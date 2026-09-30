@@ -65,6 +65,8 @@ class OfflineIssueRequest(BaseModel):
 
 class BillingPortalRequest(BaseModel):
     installation_id: str
+    nonce: str
+    signature: str
 
 
 class BillingPortalResponse(BaseModel):
