@@ -1,0 +1,30 @@
+services:
+  license-server:
+    build:
+      context: ../../apps/license-server
+    restart: unless-stopped
+    env_file: ../../.local/hosted/server.env
+    environment:
+      APP_ENV: production
+      DATABASE_URL: sqlite+pysqlite:////var/lib/bliss-license/licenses.db
+      SIGNING_PRIVATE_KEY_FILE: /run/bliss-keys/license-private.pem
+      APPLIANCE_RELEASE_FILE: /run/bliss-release/windows.zip
+    volumes:
+      - license-data:/var/lib/bliss-license
+      - ../../.local/hosted/license-private.pem:/run/bliss-keys/license-private.pem:ro
+      - ../../.local/deployment/bliss-mfa-windows-prototype.zip:/run/bliss-release/windows.zip:ro
+    expose: ["8080"]
+    command: ["sh", "-c", "python -m license_server.migrate && exec uvicorn license_server.main:app --host 0.0.0.0 --port 8080 --workers 1 --no-access-log"]
+  tls:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - tls-data:/data
+      - tls-config:/config
+    depends_on: [license-server]
+volumes:
+  license-data:
+  tls-data:
+  tls-config:

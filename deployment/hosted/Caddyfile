@@ -1,0 +1,9 @@
+license.blissitek.ca {
+    encode gzip
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+        Strict-Transport-Security "max-age=31536000"
+    }
+    reverse_proxy license-server:8080
+}

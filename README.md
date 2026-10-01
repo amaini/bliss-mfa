@@ -69,7 +69,9 @@ CUSTOMER OFFICE
 
 ## Status
 
-The repository now contains the appliance/control-plane implementation
-foundation. Production deployment still requires real multiOTP compatibility
-testing, signing-key provisioning, TLS, database migrations, CI execution and
-Stripe production configuration.
+The Windows authentication prototype and local management portal run on the
+disposable VM. Customer purchase, licensing, Resend delivery, and prototype
+installer/download code are implemented and tested locally. Public deployment
+still needs backend hosting access, DNS, a matching live Stripe webhook, and a
+real payment-to-activation acceptance test. See `docs/development-status.md` for
+verified checks and remaining clean-install/release work.

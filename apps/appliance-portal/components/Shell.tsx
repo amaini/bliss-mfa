@@ -10,6 +10,7 @@ export function Shell({ title, children }: { title: string; children: ReactNode 
         </div>
         <nav>
           <a href="/">Dashboard</a>
+          <a href="/onboarding">Get started</a>
           <a href="/users">RDP Users</a>
           <a href="/administrators">Administrators</a>
           <a href="/audit">Audit</a>

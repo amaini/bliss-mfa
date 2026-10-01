@@ -29,8 +29,11 @@ class Settings(BaseSettings):
     smtp_username: str | None = None
     smtp_password: str | None = None
     smtp_starttls: bool = True
+    resend_api_key: str | None = None
     mail_from: str = "Bliss MFA <noreply@blissitek.ca>"
     development_mail_dir: str = ".local/mail"
+    appliance_release_file: str | None = None
+    appliance_release_sha256: str | None = None
 
 
 @lru_cache

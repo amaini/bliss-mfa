@@ -11,6 +11,7 @@ dependencies = [
   "cryptography>=45,<47",
   "stripe>=12,<13",
   "email-validator>=2.2,<3",
+  "httpx>=0.28,<1",
 ]
 
 [project.optional-dependencies]

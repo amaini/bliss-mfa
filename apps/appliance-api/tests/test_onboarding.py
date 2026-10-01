@@ -1,0 +1,58 @@
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
+
+from appliance import main
+from appliance.db import Base, get_db
+from appliance.models import AdminRole, MfaUser, UserStatus
+from appliance.security import Principal, current_principal
+
+
+@pytest.fixture
+def kit(monkeypatch):
+    engine = create_engine('sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    db = Session(engine)
+    license = {'state': 'active'}
+    class Agent:
+        def status(self):
+            return license
+    monkeypatch.setattr(main, 'license_agent', Agent)
+    principal = Principal(id='owner-test', email='owner@example.com', role=AdminRole.owner)
+    main.app.dependency_overrides[get_db] = lambda: db
+    main.app.dependency_overrides[current_principal] = lambda: principal
+    yield TestClient(main.app), db, license
+    main.app.dependency_overrides.clear()
+    db.close()
+    engine.dispose()
+
+
+def test_completion_requires_enrollment_and_owner_confirmation(kit):
+    client, db, license = kit
+    assert client.get('/v1/onboarding').json()['complete'] is False
+    user = MfaUser(username='example', engine_username='example', status=UserStatus.pending)
+    db.add(user); db.commit()
+    assert client.post(f'/v1/onboarding/rdp/{user.id}').status_code == 409
+    user.status = UserStatus.active; db.commit()
+    assert client.get('/v1/onboarding').json()['complete'] is False
+    assert client.post(f'/v1/onboarding/rdp/{user.id}').status_code == 200
+    assert client.get('/v1/onboarding').json()['complete'] is True
+    user.status = UserStatus.revoked; db.commit()
+    assert client.get('/v1/onboarding').json()['complete'] is False
+
+
+def test_restricted_license_cannot_complete_onboarding(kit):
+    client, db, license = kit
+    user = MfaUser(username='example', engine_username='example', status=UserStatus.active)
+    db.add(user); db.commit(); license['state'] = 'restricted'
+    assert client.post(f'/v1/onboarding/rdp/{user.id}').status_code == 403
+    assert client.get('/v1/onboarding').json()['complete'] is False
+
+
+def test_operator_cannot_confirm_owner_acceptance(kit):
+    client, _, _ = kit
+    main.app.dependency_overrides[current_principal] = lambda: Principal(
+        id='operator-test', email='operator@example.com', role=AdminRole.operator)
+    assert client.post('/v1/onboarding/rdp/example').status_code == 403

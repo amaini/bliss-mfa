@@ -7,6 +7,9 @@ export function middleware(request: NextRequest) {
   }
 
   if (!request.cookies.get("bliss_appliance_session")?.value) {
+    if (path.startsWith("/api/")) {
+      return NextResponse.json({ detail: "Authentication required" }, { status: 401 });
+    }
     return NextResponse.redirect(new URL("/login", request.url));
   }
   return NextResponse.next();

@@ -106,6 +106,29 @@ def paid(kit):
     assert webhook(kit).status_code == 200
 
 
+def test_download_requires_paid_license_and_matching_release_hash(kit, monkeypatch):
+    client, _, root, _ = kit
+    assert client.get('/v1/customer/downloads/windows').status_code == 401
+    purchase(kit)
+    assert client.get('/v1/customer/downloads/windows').status_code == 403
+    paid(kit)
+    assert client.get('/v1/customer/downloads').json()['available'] is False
+    release = root / 'windows.zip'
+    release.write_bytes(b'validated installer archive')
+    monkeypatch.setenv('APPLIANCE_RELEASE_FILE', str(release))
+    monkeypatch.setenv('APPLIANCE_RELEASE_SHA256', hashlib.sha256(release.read_bytes()).hexdigest())
+    get_settings.cache_clear()
+    metadata = client.get('/v1/customer/downloads').json()
+    assert metadata['available'] is True
+    response = client.get(metadata['url'])
+    assert response.status_code == 200
+    assert response.content == release.read_bytes()
+    assert response.headers['cache-control'] == 'private, no-store'
+    release.write_bytes(b'corrupted installer')
+    assert client.get('/v1/customer/downloads/windows').status_code == 503
+    assert client.get('/v1/customer/downloads').status_code == 503
+
+
 def test_verification_required_and_single_use(kit):
     token = register(kit)
     client = kit[0]

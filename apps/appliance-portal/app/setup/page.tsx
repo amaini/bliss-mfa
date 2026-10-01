@@ -1,9 +1,15 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 export default function SetupPage() {
   const [error, setError] = useState<string | null>(null);
+  const [setupToken, setSetupToken] = useState("");
+  useEffect(() => {
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    setSetupToken(fragment.get("token") ?? "");
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -24,7 +30,7 @@ export default function SetupPage() {
       setError(body.detail ?? "Setup failed");
       return;
     }
-    window.location.assign("/");
+    window.location.assign("/onboarding");
   }
 
   return (
@@ -37,7 +43,7 @@ export default function SetupPage() {
         <h1>Create the office owner</h1>
         <p>This can only be completed before any local administrator exists.</p>
         {error ? <div className="notice">{error}</div> : null}
-        <label>Setup token<input name="setup_token" type="password" required /></label>
+        <label>Setup token<input name="setup_token" type="password" value={setupToken} onChange={e => setSetupToken(e.target.value)} required /></label>
         <label>Owner name<input name="display_name" /></label>
         <label>Owner email<input name="email" type="email" required /></label>
         <label>Password<input name="password" type="password" minLength={12} required /></label>

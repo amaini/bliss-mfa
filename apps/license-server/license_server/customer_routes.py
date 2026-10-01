@@ -1,3 +1,5 @@
+import hashlib
+import re
 import secrets
 import threading
 import time
@@ -14,8 +16,15 @@ from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .customer_auth import (
-    COOKIE, current_customer, digest, hash_password, invalidate_tokens,
-    issue_token, password_matches, send_account_mail, valid_token,
+    COOKIE,
+    current_customer,
+    digest,
+    hash_password,
+    invalidate_tokens,
+    issue_token,
+    password_matches,
+    send_account_mail,
+    valid_token,
 )
 from .customer_models import Customer, CustomerLicense, CustomerToken, PaymentEvent, Purchase
 from .db import get_db
@@ -193,6 +202,48 @@ def plan(_: Customer = Depends(current_customer)) -> dict:
     return {"currency": price["currency"], "unit_amount": price["unit_amount"],
             "interval": price["recurring"]["interval"],
             "interval_count": price["recurring"]["interval_count"]}
+
+
+def paid_customer_license(customer: Customer, db: Session) -> License:
+    binding = db.get(CustomerLicense, customer.id)
+    license = db.get(License, binding.license_id) if binding else None
+    if not license or license.status != LicenseStatus.active:
+        raise HTTPException(403, 'An active paid license is required for this download')
+    return license
+
+
+def release_file() -> Path | None:
+    settings = get_settings()
+    if not settings.appliance_release_file or not settings.appliance_release_sha256:
+        return None
+    path = Path(settings.appliance_release_file)
+    if not path.is_file() or not re.fullmatch('[a-fA-F0-9]{64}', settings.appliance_release_sha256):
+        return None
+    with path.open('rb') as stream:
+        digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+    if digest != settings.appliance_release_sha256.lower():
+        raise HTTPException(503, 'Installer integrity check failed; try again later')
+    return path
+
+
+@customer_api.get('/downloads')
+def downloads(customer: Customer = Depends(current_customer), db: Session = Depends(get_db)) -> dict:
+    paid_customer_license(customer, db)
+    path = release_file()
+    return {'available': path is not None,
+            'url': '/v1/customer/downloads/windows' if path else None,
+            'sha256': get_settings().appliance_release_sha256 if path else None,
+            'filename': 'bliss-mfa-windows-prototype.zip' if path else None}
+
+
+@customer_api.get('/downloads/windows')
+def download_windows(customer: Customer = Depends(current_customer), db: Session = Depends(get_db)) -> FileResponse:
+    paid_customer_license(customer, db)
+    path = release_file()
+    if path is None:
+        raise HTTPException(503, 'Windows installer is not available yet')
+    return FileResponse(path, media_type='application/zip', filename='bliss-mfa-windows-prototype.zip',
+                        headers={'Cache-Control': 'private, no-store'})
 
 
 @customer_api.post("/checkout")

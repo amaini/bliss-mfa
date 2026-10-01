@@ -5,6 +5,7 @@ from datetime import timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
 
+import httpx
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
@@ -72,7 +73,21 @@ def send_account_mail(email: str, token: str, purpose: str) -> None:
     message["To"] = email
     message["Subject"] = "Verify your Bliss account" if purpose == "verify" else "Reset your Bliss password"
     message.set_content(f"Open this link to continue:\n{link}\n\nIf you did not request this, ignore it.")
-    if settings.smtp_host:
+    if settings.resend_api_key:
+        try:
+            response = httpx.post('https://api.resend.com/emails',
+                headers={'Authorization': 'Bearer ' + settings.resend_api_key,
+                         'Idempotency-Key': 'bliss-account-' + digest(token)},
+                json={'from': settings.mail_from, 'to': [email],
+                      'subject': str(message['Subject']), 'text': message.get_content()},
+                timeout=15, trust_env=False)
+            response.raise_for_status()
+            if not isinstance(response.json().get('id'), str):
+                raise ValueError('Missing email delivery identifier')
+        except (httpx.HTTPError, ValueError, AttributeError):
+            # Provider errors can contain customer email or private verification links.
+            raise HTTPException(503, 'Email delivery is temporarily unavailable. Try again later.') from None
+    elif settings.smtp_host:
         with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as smtp:
             if settings.smtp_starttls:
                 smtp.starttls()
