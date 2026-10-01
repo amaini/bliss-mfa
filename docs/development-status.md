@@ -56,6 +56,13 @@ backend acceptance remain required before the public paid journey can run.
   verifies all copied values, and commits an import marker atomically. Startup
   requires that marker. A non-superuser application login and private database
   network are configured; live cutover requires the deployment agent.
+- The user reports PostgreSQL cutover completed; public health/portal and a signed
+  non-payment probe pass. Engine/import/account-preservation evidence from the
+  deployed container is still pending. A real purchase screenshot shows payment
+  confirmed and an active one-seat license. Its installer download is blocked by
+  a deployed ZIP/configured SHA-256 mismatch. The verified Windows ZIP and checksum
+  are now published in GitHub prerelease v0.1.0-windows-prototype; INSTALLER.md
+  describes replacing the mounted artifact without bypassing integrity checks.
 
 ## Validation in this pass
 
@@ -79,7 +86,9 @@ RADIUS, SID, outage, and scheduled-task results remain in the first-deployment r
 
 - Perform the PostgreSQL cutover using deployment/hosted/POSTGRESQL.md, preserving
   existing accounts and the signing key; verify an existing login and backup.
-- Verify real signed Stripe delivery and complete payment-to-activation acceptance.
+- Correct the deployed installer hash/mount, verify the paid download, and complete
+  payment-to-activation acceptance. Real payment-to-license is confirmed by the
+  screenshot; real Stripe delivery and installed paid activation still need evidence.
   Email registration, paid installer availability, and deployed private-key/release
   mounts still need acceptance beyond the passing public health endpoint.
 - Complete human first-owner setup on the VM.
