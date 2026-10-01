@@ -55,6 +55,7 @@ if (!$EngineOnly) {
     $welcome=Join-Path $rootPath 'bliss-mfa\.local\engine\Open-Appliance.html'
     & icacls.exe $welcome /grant ('*'+$identity.User.Value+':R') | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Setup-page access failed.' }
+    & (Join-Path $PSScriptRoot 'Install-WindowsIntegration.ps1') -Root $rootPath
     Write-Output ('Appliance installed. Open the private setup page: '+$welcome)
 } else {
     Write-Output 'Engine installed. Complete appliance setup and enroll a recovery-tested user before enabling RDP enforcement.'

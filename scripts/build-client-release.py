@@ -65,6 +65,10 @@ guide = '''Bliss MFA Windows prototype
    local portal's Get started page.
 
 Local portal: https://localhost:19443 (on the installed Windows machine).
+Reopen it using the Bliss MFA Portal shortcut on your desktop or Start menu.
+Uninstall through Windows Settings > Apps > Installed apps > Bliss MFA, or the
+Start menu's Uninstall Bliss MFA shortcut. Private data and backups are retained.
+Uninstalling removes RDP MFA protection and does not cancel your subscription.
 Private setup page: C:\\BlissMFA\\bliss-mfa\\.local\\engine\\Open-Appliance.html
 
 The provider initially has enforcement disabled. Enabling protection affects RDP
@@ -87,6 +91,8 @@ with zipfile.ZipFile(args.output, 'w', zipfile.ZIP_DEFLATED) as release:
     # Already compressed; avoid a second costly compression pass.
     release.write(args.archive, 'BlissMFA-Appliance.zip', compress_type=zipfile.ZIP_STORED)
     release.writestr('Install-BlissEngine.ps1', (REPO / 'scripts/Install-BlissEngine.ps1').read_bytes())
+    for name in ('Install-WindowsIntegration.ps1', 'Uninstall-BlissMFA.ps1'):
+        release.writestr(name, (REPO / 'scripts' / name).read_bytes())
     release.writestr('Setup-BlissMFA.ps1', setup)
     release.writestr('Enable-RdpProtection.ps1', enable)
     release.writestr('README.txt', guide)
