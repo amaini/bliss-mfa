@@ -276,3 +276,28 @@ def test_public_page_is_available(kit):
     response = kit[0].get("/customer")
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
+
+
+def test_signing_failure_preserves_activation_code(kit, monkeypatch):
+    from license_server.models import ActivationEvent
+    purchase(kit)
+    paid(kit)
+    client, engine, _, _ = kit
+    code = client.post("/v1/customer/activation-code").json()["activation_code"]
+    with Session(engine) as db:
+        before = db.scalar(select(func.count()).select_from(ActivationEvent))
+    original = main.lease_for
+    def fail_signing(license):
+        raise RuntimeError("Signing key unavailable")
+    monkeypatch.setattr(main, "lease_for", fail_signing)
+    payload = {"activation_code": code, "installation_id": "MFA-retry",
+               "installation_public_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}
+    with pytest.raises(RuntimeError, match="Signing key unavailable"):
+        client.post("/v1/activate/online", json=payload)
+    with Session(engine) as db:
+        license = db.scalar(select(License))
+        assert license.installation_id is None
+        assert license.activation_code_hash == main.activation_hash(code)
+        assert db.scalar(select(func.count()).select_from(ActivationEvent)) == before
+    monkeypatch.setattr(main, "lease_for", original)
+    assert client.post("/v1/activate/online", json=payload).status_code == 200

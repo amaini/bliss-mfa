@@ -251,8 +251,10 @@ def activate_online(payload: ActivateOnlineRequest, db: Session = Depends(get_db
     license.activation_code_hash = None
     license.last_seen_at = utcnow()
     event(db, license, "installation.activated", payload.installation_id)
+    # Do not consume the activation code if signing the lease fails.
+    response = lease_for(license)
     db.commit()
-    return lease_for(license)
+    return response
 
 
 @app.post("/v1/challenges", response_model=ChallengeResponse)
