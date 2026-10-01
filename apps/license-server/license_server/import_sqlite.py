@@ -42,16 +42,21 @@ def digest_rows(connection, table):
 
 def validate_source(source):
     tables = set(inspect(source).get_table_names())
+    version = source.execute(text('SELECT version FROM bliss_schema_version')).scalar_one() if 'bliss_schema_version' in tables else None
     expected = set(Base.metadata.tables) | {'bliss_schema_version'}
+    if version == 1:
+        expected -= {'customer_trials'}
     if tables != expected:
-        raise RuntimeError('Source schema differs from version 1; explicit review required')
-    if source.execute(text('SELECT version FROM bliss_schema_version')).scalar_one() != 1:
+        raise RuntimeError('Source schema differs from its declared version; explicit review required')
+    if version not in (1, 2):
         raise RuntimeError('Unsupported source schema version')
     if source.execute(text('PRAGMA integrity_check')).scalar_one() != 'ok':
         raise RuntimeError('Source integrity check failed')
     if source.execute(text('PRAGMA foreign_key_check')).first() is not None:
         raise RuntimeError('Source foreign-key check failed')
     for name, table in Base.metadata.tables.items():
+        if name not in tables:
+            continue
         columns = {c['name'] for c in inspect(source).get_columns(name)}
         if columns != set(table.columns.keys()):
             raise RuntimeError('Source columns differ in ' + name)
@@ -79,6 +84,9 @@ def transfer(source_engine, target_engine, *, confirm_maintenance=False):
                     raise RuntimeError('Target contains data; refusing overwrite')
             for table in Base.metadata.sorted_tables:
                 batch = []
+                if table.name not in inspect(source).get_table_names():
+                    counts[table.name] = 0
+                    continue
                 for row in source.execute(select(table)).mappings():
                     batch.append({k: normal(v) for k, v in row.items()})
                     if len(batch) == 500:

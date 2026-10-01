@@ -1,13 +1,13 @@
 """Fulfill verified Checkout sessions using current Stripe subscription state."""
 import stripe
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .customer_auth import digest
-from .customer_models import Customer, CustomerLicense, Purchase
-from .models import ActivationEvent, License, LicenseStatus, LicenseType
+from .customer_models import Customer, CustomerLicense, CustomerTrial, Purchase
+from .models import ActivationEvent, License, LicenseStatus, LicenseType, utcnow
 
 
 def stripe_options() -> dict:
@@ -48,6 +48,10 @@ def reconcile_subscription(db: Session, subscription_id: str) -> None:
     if state == "active" and isinstance(invoice, dict) and invoice.get("status") == "paid":
         license.max_rdp_users = subscription_seats(subscription, get_settings().stripe_rdp_price_id)
         license.status = LicenseStatus.active
+        trial = db.get(CustomerTrial, binding.customer_id)
+        if trial and trial.converted_at is None:
+            trial.converted_at = utcnow()
+            db.add(ActivationEvent(license_id=license.id, event_type='customer.trial_upgraded'))
     elif state == "canceled":
         license.status = LicenseStatus.expired
     else:
@@ -80,16 +84,23 @@ def fulfill_checkout(db: Session, session_id: str) -> Purchase | None:
         # After fulfillment, changes are managed by subscription reconciliation.
         if purchase.status != "fulfilled":
             raise HTTPException(409, "Checkout seat quantity mismatch")
+    customer = db.get(Customer, purchase.customer_id)
+    db.execute(update(Customer).where(Customer.id == customer.id).values(company_name=customer.company_name))
     binding = db.get(CustomerLicense, purchase.customer_id)
     if binding:
         if binding.subscription_id != subscription_id:
             raise HTTPException(409, "Customer already owns another subscription")
     else:
-        customer = db.get(Customer, purchase.customer_id)
-        license = License(customer_name=customer.company_name, customer_email=customer.email,
+        trial = db.get(CustomerTrial, customer.id)
+        license = db.get(License, trial.license_id) if trial else None
+        if license is None:
+            license = License(customer_name=customer.company_name, customer_email=customer.email,
                           license_type=LicenseType.online, max_rdp_users=seats,
                           stripe_customer_id=identifier(session.get("customer")),
                           stripe_subscription_id=subscription_id)
+        else:
+            license.stripe_customer_id = identifier(session.get('customer'))
+            license.stripe_subscription_id = subscription_id
         db.add(license)
         db.flush()
         db.add(CustomerLicense(customer_id=customer.id, license_id=license.id,

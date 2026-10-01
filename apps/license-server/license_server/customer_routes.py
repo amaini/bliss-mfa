@@ -3,6 +3,7 @@ import re
 import secrets
 import threading
 import time
+from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -26,9 +27,10 @@ from .customer_auth import (
     send_account_mail,
     valid_token,
 )
-from .customer_models import Customer, CustomerLicense, CustomerToken, PaymentEvent, Purchase
+from .customer_models import Customer, CustomerLicense, CustomerToken, CustomerTrial, PaymentEvent, Purchase
 from .db import get_db
-from .models import ActivationEvent, License, LicenseStatus, utcnow
+from .models import ActivationEvent, License, LicenseStatus, LicenseType, utcnow
+from .trials import entitlement_status, expiry, trial_for
 from .payments import fulfill_checkout, identifier, reconcile_subscription, stripe_options
 
 router = APIRouter()
@@ -184,11 +186,37 @@ def reset_password(payload: ResetInput, db: Session = Depends(get_db)) -> dict:
 @customer_api.get("/me")
 def me(customer: Customer = Depends(current_customer), db: Session = Depends(get_db)) -> dict:
     binding = db.get(CustomerLicense, customer.id)
-    license = db.get(License, binding.license_id) if binding else None
+    trial = db.get(CustomerTrial, customer.id)
+    license = db.get(License, binding.license_id if binding else trial.license_id) if binding or trial else None
     return {"email": customer.email, "company_name": customer.company_name,
-            "license": {"id": license.id, "status": license.status.value,
+            "trial_available": not binding and not trial,
+            "license": {"id": license.id, "status": entitlement_status(db, license).value,
+                        "is_trial": bool(trial and not trial.converted_at),
+                        "trial_expires_at": expiry(trial).isoformat() if trial and not trial.converted_at else None,
                         "max_rdp_users": license.max_rdp_users,
                         "installation_id": license.installation_id} if license else None}
+
+
+@customer_api.post('/trial')
+def start_trial(customer: Customer = Depends(current_customer), db: Session = Depends(get_db)) -> dict:
+    db.execute(update(Customer).where(Customer.id == customer.id).values(company_name=customer.company_name))
+    if db.get(CustomerLicense, customer.id):
+        raise HTTPException(409, 'You already have a subscription')
+    trial = db.get(CustomerTrial, customer.id)
+    if trial:
+        if utcnow() >= expiry(trial):
+            raise HTTPException(409, 'Your trial has ended. Choose a paid plan to continue.')
+        return {'expires_at': expiry(trial).isoformat(), 'max_rdp_users': 1}
+    license = License(customer_name=customer.company_name, customer_email=customer.email,
+                      license_type=LicenseType.online, max_rdp_users=1)
+    db.add(license)
+    db.flush()
+    trial = CustomerTrial(customer_id=customer.id, license_id=license.id,
+                          expires_at=utcnow() + timedelta(days=14))
+    db.add(trial)
+    db.add(ActivationEvent(license_id=license.id, event_type='customer.trial_started'))
+    db.commit()
+    return {'expires_at': expiry(trial).isoformat(), 'max_rdp_users': 1}
 
 
 @customer_api.get("/plan")
@@ -206,9 +234,10 @@ def plan(_: Customer = Depends(current_customer)) -> dict:
 
 def paid_customer_license(customer: Customer, db: Session) -> License:
     binding = db.get(CustomerLicense, customer.id)
-    license = db.get(License, binding.license_id) if binding else None
-    if not license or license.status != LicenseStatus.active:
-        raise HTTPException(403, 'An active paid license is required for this download')
+    trial = db.get(CustomerTrial, customer.id)
+    license = db.get(License, binding.license_id if binding else trial.license_id) if binding or trial else None
+    if not license or entitlement_status(db, license) != LicenseStatus.active:
+        raise HTTPException(403, 'An active trial or paid license is required for this download')
     return license
 
 
@@ -300,10 +329,11 @@ def refresh_purchase(session_id: str, customer: Customer = Depends(current_custo
 @customer_api.post("/activation-code")
 def activation_code(customer: Customer = Depends(current_customer), db: Session = Depends(get_db)) -> dict:
     binding = db.get(CustomerLicense, customer.id)
-    license = db.get(License, binding.license_id) if binding else None
+    trial = db.get(CustomerTrial, customer.id)
+    license = db.get(License, binding.license_id if binding else trial.license_id) if binding or trial else None
     if not license:
-        raise HTTPException(403, "Complete payment first")
-    if license.status != LicenseStatus.active or license.installation_id:
+        raise HTTPException(403, "Start a trial or complete payment first")
+    if entitlement_status(db, license) != LicenseStatus.active or license.installation_id:
         raise HTTPException(409, "An activation code is available only for an active, unbound license")
     code = "BLS-" + secrets.token_urlsafe(32)
     license.activation_code_hash = digest(code)

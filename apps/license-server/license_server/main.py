@@ -81,8 +81,11 @@ def new_activation_code() -> str:
     return f"BLS-{raw[:8]}-{raw[8:16]}-{raw[16:24]}-{raw[24:32]}"
 
 
-def lease_for(license: License, *, offline: bool = False) -> LeaseResponse:
+def lease_for(license: License, *, db: Session, offline: bool = False) -> LeaseResponse:
+    from .trials import entitlement_status, expiry, trial_for
     now = utcnow()
+    trial = trial_for(db, license.id)
+    status = entitlement_status(db, license)
     if offline:
         if not license.offline_expires_at:
             raise HTTPException(status_code=409, detail="Offline expiry is not configured")
@@ -91,17 +94,21 @@ def lease_for(license: License, *, offline: bool = False) -> LeaseResponse:
     else:
         lease_expires = now + timedelta(days=settings.online_lease_days)
         grace_expires = now + timedelta(days=settings.online_grace_days)
+        if trial:
+            lease_expires = min(lease_expires, expiry(trial))
+            grace_expires = min(grace_expires, expiry(trial))
 
     payload = {
         "v": 1,
         "license_id": license.id,
         "license_type": license.license_type.value,
         "installation_id": license.installation_id,
-        "state": license.status.value,
+        "state": status.value,
         "max_rdp_users": license.max_rdp_users,
         "issued_at": iso(now),
         "lease_expires_at": iso(lease_expires),
         "grace_expires_at": iso(grace_expires) if grace_expires else None,
+        "trial_expires_at": iso(expiry(trial)) if trial else None,
         "features": {
             "rdp_mfa": True,
             "local_admin": True,
@@ -111,7 +118,7 @@ def lease_for(license: License, *, offline: bool = False) -> LeaseResponse:
     }
     return LeaseResponse(
         signed_lease=sign_payload(payload),
-        state=license.status.value,
+        state=status.value,
         max_rdp_users=license.max_rdp_users,
         lease_expires_at=lease_expires,
         grace_expires_at=grace_expires,
@@ -241,7 +248,8 @@ def activate_online(payload: ActivateOnlineRequest, db: Session = Depends(get_db
         raise HTTPException(status_code=401, detail="Invalid activation code")
     if license.license_type != LicenseType.online:
         raise HTTPException(status_code=409, detail="This license requires offline activation")
-    if license.status != LicenseStatus.active:
+    from .trials import entitlement_status
+    if entitlement_status(db, license) != LicenseStatus.active:
         raise HTTPException(status_code=403, detail="License is not active")
     if license.installation_id and license.installation_id != payload.installation_id:
         raise HTTPException(status_code=409, detail="License is already bound to another installation")
@@ -252,7 +260,7 @@ def activate_online(payload: ActivateOnlineRequest, db: Session = Depends(get_db
     license.last_seen_at = utcnow()
     event(db, license, "installation.activated", payload.installation_id)
     # Do not consume the activation code if signing the lease fails.
-    response = lease_for(license)
+    response = lease_for(license, db=db)
     db.commit()
     return response
 
@@ -338,7 +346,7 @@ def heartbeat(payload: HeartbeatRequest, db: Session = Depends(get_db)) -> Lease
         ),
     )
     db.commit()
-    return lease_for(license)
+    return lease_for(license, db=db)
 
 
 @app.post("/v1/release")
@@ -487,7 +495,7 @@ def issue_offline(payload: OfflineIssueRequest, db: Session = Depends(get_db)) -
     license.activation_code_hash = None
     event(db, license, "offline.activated", installation_id)
     db.commit()
-    return lease_for(license, offline=True)
+    return lease_for(license, db=db, offline=True)
 
 
 @app.post("/v1/billing/portal", response_model=BillingPortalResponse)

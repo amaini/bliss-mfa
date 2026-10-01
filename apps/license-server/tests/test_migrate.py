@@ -20,3 +20,17 @@ def test_unversioned_data_is_preserved():
         migrate(engine)
     with engine.connect() as db:
         assert db.execute(text('SELECT data FROM valuable')).scalar_one() == 'preserved'
+
+
+def test_version_one_upgrade_preserves_existing_customer(database_engine):
+    from license_server.customer_models import CustomerTrial
+    migrate(database_engine)
+    with database_engine.begin() as db:
+        CustomerTrial.__table__.drop(bind=db)
+        db.execute(text('UPDATE bliss_schema_version SET version=1'))
+        db.execute(text("INSERT INTO customers (id,email,company_name,password_hash,created_at) VALUES ('existing','existing@example.com','Existing','unchanged','2026-01-01')"))
+    migrate(database_engine)
+    migrate(database_engine)
+    with database_engine.connect() as db:
+        assert db.execute(text('SELECT version FROM bliss_schema_version')).scalar_one() == 2
+        assert db.execute(text('SELECT password_hash FROM customers')).scalar_one() == 'unchanged'

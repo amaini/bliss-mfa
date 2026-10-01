@@ -55,7 +55,8 @@ def source(tmp_path):
 def test_preserves_every_table_password_and_license(source, database_engine):
     result = transfer(source, database_engine, confirm_maintenance=True)
     assert set(result) == set(Base.metadata.tables)
-    assert all(count == 1 for count in result.values())
+    assert all(count == 1 for name, count in result.items() if name != 'customer_trials')
+    assert result['customer_trials'] == 0
     with Session(database_engine) as db:
         assert password_matches(db.get(Customer, 'cus_source').password_hash, 'correct-horse-test-only')
         assert db.get(License, 'lic_source').installation_id == 'installation1'
@@ -73,6 +74,18 @@ def test_refuses_nonempty_target(source, database_engine):
     with database_engine.connect() as target:
         assert target.scalar(select(func.count()).select_from(Customer)) == 0
         assert target.scalar(select(func.count()).select_from(PaymentEvent)) == 1
+
+
+def test_imports_legacy_version_one_without_trials(source, database_engine):
+    from license_server.customer_models import CustomerTrial
+    with source.begin() as db:
+        CustomerTrial.__table__.drop(bind=db)
+        db.execute(text('UPDATE bliss_schema_version SET version=1'))
+    result = transfer(source, database_engine, confirm_maintenance=True)
+    assert result['customer_trials'] == 0
+    with database_engine.connect() as db:
+        assert db.execute(text('SELECT version FROM bliss_schema_version')).scalar_one() == 2
+        assert db.scalar(select(func.count()).select_from(Customer)) == 1
 
 
 def test_failure_rolls_back_previously_inserted_rows(source, database_engine):

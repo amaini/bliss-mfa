@@ -287,7 +287,7 @@ def test_signing_failure_preserves_activation_code(kit, monkeypatch):
     with Session(engine) as db:
         before = db.scalar(select(func.count()).select_from(ActivationEvent))
     original = main.lease_for
-    def fail_signing(license):
+    def fail_signing(license, **kwargs):
         raise RuntimeError("Signing key unavailable")
     monkeypatch.setattr(main, "lease_for", fail_signing)
     payload = {"activation_code": code, "installation_id": "MFA-retry",
@@ -301,3 +301,119 @@ def test_signing_failure_preserves_activation_code(kit, monkeypatch):
         assert db.scalar(select(func.count()).select_from(ActivationEvent)) == before
     monkeypatch.setattr(main, "lease_for", original)
     assert client.post("/v1/activate/online", json=payload).status_code == 200
+
+
+def test_trial_is_verified_one_time_and_downloads_without_payment(kit, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from license_server.customer_models import CustomerTrial
+    client, engine, root, _ = kit
+    assert client.post('/v1/customer/trial', json={}).status_code == 401
+    register(kit)
+    assert client.post('/v1/customer/login', json={'email':'owner@example.com','password':PASSWORD}).status_code == 403
+    # Use another verified account because registration above intentionally remains unverified.
+    account(kit, 'trial@example.com')
+    before = datetime.now(timezone.utc)
+    result = client.post('/v1/customer/trial', json={})
+    assert result.status_code == 200
+    end = datetime.fromisoformat(result.json()['expires_at'])
+    assert before + timedelta(days=14) <= end <= datetime.now(timezone.utc) + timedelta(days=14)
+    assert client.post('/v1/customer/trial', json={}).json()['expires_at'] == result.json()['expires_at']
+    info = client.get('/v1/customer/me').json()
+    assert info['trial_available'] is False
+    assert info['license']['is_trial'] and info['license']['max_rdp_users'] == 1
+    release = root / 'trial.zip'
+    release.write_bytes(b'trial-installer-fixture')
+    monkeypatch.setenv('APPLIANCE_RELEASE_FILE', str(release))
+    monkeypatch.setenv('APPLIANCE_RELEASE_SHA256', hashlib.sha256(release.read_bytes()).hexdigest())
+    get_settings.cache_clear()
+    assert client.get('/v1/customer/downloads/windows').content == release.read_bytes()
+    assert client.post('/v1/customer/activation-code', json={}).status_code == 200
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(CustomerTrial)) == 1
+        assert db.scalar(select(func.count()).select_from(Purchase)) == 0
+
+
+def test_trial_expiry_caps_signed_lease_and_cannot_be_restarted(kit):
+    from datetime import timedelta
+    from license_server.customer_models import CustomerTrial
+    from license_server.models import utcnow
+    client, engine, _, _ = kit
+    account(kit)
+    client.post('/v1/customer/trial', json={})
+    code = client.post('/v1/customer/activation-code', json={}).json()['activation_code']
+    response = client.post('/v1/activate/online', json={'activation_code':code,
+        'installation_id':'MFA-trial-test','installation_public_key':'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'})
+    assert response.status_code == 200
+    envelope = json.loads(b64url_decode(response.json()['signed_lease']))
+    payload = json.loads(b64url_decode(envelope['payload']))
+    assert payload['lease_expires_at'] <= payload['trial_expires_at']
+    assert payload['grace_expires_at'] <= payload['trial_expires_at']
+    with Session(engine) as db:
+        trial = db.scalar(select(CustomerTrial))
+        trial.expires_at = utcnow() - timedelta(seconds=1)
+        db.commit()
+        signed = main.lease_for(db.get(License, trial.license_id), db=db)
+        assert signed.state == 'expired'
+    assert client.get('/v1/customer/me').json()['license']['status'] == 'expired'
+    assert client.post('/v1/customer/trial', json={}).status_code == 409
+    assert client.post('/v1/customer/activation-code', json={}).status_code == 409
+    assert client.get('/v1/customer/downloads').status_code == 403
+
+
+@pytest.mark.parametrize('expired', [False, True])
+def test_trial_upgrade_preserves_bound_appliance_and_removes_expiry(kit, expired):
+    from datetime import timedelta
+    from license_server.models import utcnow
+    from license_server.customer_models import CustomerTrial
+    client, engine, _, _ = kit
+    account(kit)
+    assert client.post('/v1/customer/trial', json={}).status_code == 200
+    original = client.get('/v1/customer/me').json()['license']['id']
+    with Session(engine) as db:
+        license = db.get(License, original)
+        license.installation_id = 'MFA-preserved-trial-device'
+        license.installation_public_key = 'original-device-public-key'
+        if expired:
+            db.scalar(select(CustomerTrial)).expires_at = utcnow() - timedelta(days=1)
+        db.commit()
+    assert client.post('/v1/customer/checkout', json={'seats':5}).status_code == 200
+    assert client.get('/v1/customer/me').json()['license']['is_trial'] is True
+    paid(kit)
+    info = client.get('/v1/customer/me').json()['license']
+    assert info['id'] == original and info['installation_id'] == 'MFA-preserved-trial-device'
+    assert info['max_rdp_users'] == 5 and info['is_trial'] is False
+    with Session(engine) as db:
+        license = db.get(License, original)
+        assert license.installation_public_key == 'original-device-public-key'
+        assert db.scalar(select(CustomerTrial)).converted_at is not None
+        envelope = json.loads(b64url_decode(main.lease_for(license, db=db).signed_lease))
+        assert json.loads(b64url_decode(envelope['payload']))['trial_expires_at'] is None
+    assert client.post('/v1/customer/trial', json={}).status_code == 409
+
+
+def test_cached_trial_is_restricted_at_deadline_without_contacting_server(kit, monkeypatch):
+    from datetime import datetime, timedelta
+    from pathlib import Path
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3] / 'services/license-agent'))
+    from license_agent.config import get_settings as agent_settings
+    from license_agent.state import LicenseState
+    private = serialization.load_pem_private_key(main.settings.signing_private_key_pem.encode(), password=None)
+    monkeypatch.setenv('BLISS_SIGNING_PUBLIC_KEY_PEM', private.public_key().public_bytes(
+        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo).decode())
+    agent_settings.cache_clear()
+    try:
+        client, _, root, _ = kit
+        state = LicenseState(str(root / 'trial-agent'))
+        account(kit)
+        end = datetime.fromisoformat(client.post('/v1/customer/trial', json={}).json()['expires_at'])
+        code = client.post('/v1/customer/activation-code', json={}).json()['activation_code']
+        response = client.post('/v1/activate/online', json={'activation_code':code,
+            'installation_id':state.installation_id(), 'installation_public_key':state.public_key_b64()})
+        state.save_lease(response.json()['signed_lease'])
+        assert state.reserve_seat('first-user')['allowed']
+        assert not state.reserve_seat('second-user')['allowed']
+        monkeypatch.setattr(state, 'trusted_now', lambda: end + timedelta(seconds=1))
+        assert state.effective_status()['state'] == 'restricted'
+        assert not state.reserve_seat('third-user')['allowed']
+    finally:
+        agent_settings.cache_clear()

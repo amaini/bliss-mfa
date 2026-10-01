@@ -44,6 +44,14 @@ class CustomerLicense(Base):
     subscription_id: Mapped[str] = mapped_column(String(255), unique=True)
 
 
+class CustomerTrial(Base):
+    __tablename__ = "customer_trials"
+    customer_id: Mapped[str] = mapped_column(ForeignKey("customers.id"), primary_key=True)
+    license_id: Mapped[str] = mapped_column(ForeignKey("licenses.id"), unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    converted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class PaymentEvent(Base):
     __tablename__ = "payment_events"
     id: Mapped[str] = mapped_column(String(255), primary_key=True)
