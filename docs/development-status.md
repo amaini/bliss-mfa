@@ -3,8 +3,10 @@
 The target is paid-client self-service purchase, installation, activation,
 enrollment, and usable Windows/RDP MFA. The selected website is blissitek.ca
 WordPress/WooCommerce; its application tab links to a separate licensing backend.
-Email uses Resend. Cloudflare DNS is observed, but backend hosting access is still
-required before the public paid journey can run.
+Email uses Resend. The user identified a Contabo Ubuntu 24.04 VPS with CyberPanel
+and Portainer inside LXD. A WordPress-ready preview page and private-port Portainer
+deployment handoff are prepared for the user's publishing agent. Deployment and
+backend acceptance remain required before the public paid journey can run.
 
 ## Implemented and checked
 

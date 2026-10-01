@@ -1,5 +1,10 @@
 # Hosted licensing and paid-client onboarding
 
+For the selected Contabo/CyberPanel VPS with Portainer inside LXD, use
+`PORTAINER.md` and `portainer-stack.yaml`. That option uses CyberPanel HTTPS
+instead of launching Caddy alongside the existing website. The compose/Caddy
+instructions below are an alternative for a dedicated host.
+
 The existing blissitek.ca WordPress/WooCommerce site provides the product tab.
 The included WordPress plugin's `[bliss_mfa]` shortcode links to the separate
 licensing/client portal at https://license.blissitek.ca/customer. Purchases use

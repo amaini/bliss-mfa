@@ -1,0 +1,39 @@
+# Docker Standalone endpoint. Build bliss-license:prototype on that endpoint first.
+# Add private backend settings through Portainer's environment-variable form.
+services:
+  license-server:
+    image: bliss-license:prototype
+    pull_policy: never
+    restart: unless-stopped
+    env_file: [stack.env]
+    environment:
+      APP_ENV: production
+      DATABASE_URL: sqlite+pysqlite:////var/lib/bliss-license/licenses.db
+      SIGNING_PRIVATE_KEY_FILE: /run/bliss-keys/license-private.pem
+      APPLIANCE_RELEASE_FILE: /run/bliss-release/windows.zip
+      CUSTOMER_PORTAL_URL: https://license.blissitek.ca
+    ports:
+      - "${BLISS_BIND_IP:?Set the LXD private IP reachable from CyberPanel}:18080:8080"
+    volumes:
+      - license-data:/var/lib/bliss-license
+      - type: bind
+        source: /opt/bliss-mfa/private/license-private.pem
+        target: /run/bliss-keys/license-private.pem
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /opt/bliss-mfa/releases/windows.zip
+        target: /run/bliss-release/windows.zip
+        read_only: true
+        bind:
+          create_host_path: false
+    command: [sh, -c, "python -m license_server.migrate && exec uvicorn license_server.main:app --host 0.0.0.0 --port 8080 --workers 1 --no-access-log"]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+volumes:
+  license-data:

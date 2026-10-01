@@ -1,5 +1,9 @@
 # Bliss Secure MFA marketing page
 
+Historical draft. Use `../windows-mfa/index.html` and its `PUBLISHING.md` for
+the current Windows/RDP prototype. This earlier draft's plans and managed/VPN
+claims are not the current release scope.
+
 This folder contains the WordPress-ready source for the future
 `blissitek.ca/managed-mfa` product page.
 
