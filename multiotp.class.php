@@ -23641,10 +23641,33 @@ EOL;
           
                   $reply = "";
                   $last_length = 0;
+                  $expected_reply_length = NULL;
                   while ((!feof($fp)) && ((!$info['timed_out']) || ($last_length != mb_strlen($reply)))) {
                       $last_length = mb_strlen($reply);
-                      $reply.= fgets($fp, 1024);
+                      // Read exactly the framed body without waiting for a TLS EOF.
+                      if (NULL === $expected_reply_length) {
+                          $reply.= fgets($fp, 1024);
+                      } else {
+                          $remaining_reply_length = $expected_reply_length - strlen($reply);
+                          if ($remaining_reply_length <= 0) { break; }
+                          $reply.= fread($fp, min(8192, $remaining_reply_length));
+                      }
                       $info = stream_get_meta_data($fp);
+                      // A complete Content-Length response does not require a TLS EOF.
+                      // Some HTTPS servers keep the stream open after the body.
+                      $reply_header_end = mb_strpos($reply, "\r\n\r\n");
+                      if (FALSE !== $reply_header_end) {
+                          $reply_header = mb_substr($reply, 0, $reply_header_end)."\r\n";
+                          if (preg_match('/\r\nContent-Length:\s*([0-9]+)\s*\r\n/i', $reply_header, $length_match)) {
+                              $expected_body_length = intval($length_match[1]);
+                              $expected_reply_length = $reply_header_end + 4 + $expected_body_length;
+                              if (strlen($reply) - $reply_header_end - 4 >= $expected_body_length) {
+                                  $reply = substr($reply, 0, $reply_header_end + 4 + $expected_body_length);
+                                  $info['timed_out'] = FALSE;
+                                  break;
+                              }
+                          }
+                      }
                       // No flush, as we are not dislaying anything in the process
                       // @ob_flush(); // Avoid notice if any (if the buffer is empty and therefore cannot be flushed)
                       // flush(); 
