@@ -46,6 +46,11 @@ backend acceptance remain required before the public paid journey can run.
   charge was created.
 - WordPress product-tab plugin and Docker/Caddy deployment are prepared. Customers
   receive only the licensing public key; the private key stays on Bliss infrastructure.
+- Public HTTPS health and client portal now return 200. The corrected product
+  page is published. A live Stripe webhook was created with the required events;
+  its signing secret is saved privately in the local server.env. The deployed
+  webhook route returns 503 because verification is not configured, so Portainer
+  must load that secret before a live purchase acceptance run.
 
 ## Validation in this pass
 
@@ -65,11 +70,10 @@ RADIUS, SID, outage, and scheduled-task results remain in the first-deployment r
 
 ## Remaining acceptance and deployment
 
-- Provide the backend host/access, configure license.blissitek.ca DNS, and deploy
-  the backend and WordPress entry point.
-- Create the actual live-mode Stripe webhook with this backend URL and matching
-  secret. No matching live endpoint appeared in the read-only check. Complete a
-  real payment-to-activation acceptance test after deployment.
+- Load the newly created live webhook signing secret into the deployed backend,
+  verify real signed Stripe delivery, and complete payment-to-activation acceptance.
+  Email registration, paid installer availability, and deployed private-key/release
+  mounts still need acceptance beyond the passing public health endpoint.
 - Complete human first-owner setup on the VM.
 - Test the new clean-install wrapper on a clean Windows target. Existing provider
   installation and runtime upgrades were tested; the new wrapper has not received
