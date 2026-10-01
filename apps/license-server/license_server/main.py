@@ -44,6 +44,9 @@ app.include_router(customer_router)
 
 @app.on_event("startup")
 def startup() -> None:
+    if settings.require_sqlite_import:
+        from .migrate import require_import
+        require_import(engine)
     if settings.app_env == "development":
         Base.metadata.create_all(bind=engine)
 

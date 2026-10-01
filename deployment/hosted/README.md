@@ -1,7 +1,8 @@
 # Hosted licensing and paid-client onboarding
 
 For the selected Contabo/CyberPanel VPS with Portainer inside LXD, use
-`PORTAINER.md` and `portainer-stack.yaml`. That option uses CyberPanel HTTPS
+`POSTGRESQL.md` for migration and `portainer-stack.yaml` for the new hosted stack.
+That option uses CyberPanel HTTPS
 instead of launching Caddy alongside the existing website. The compose/Caddy
 instructions below are an alternative for a dedicated host.
 
@@ -37,12 +38,15 @@ Required settings:
 - `MAIL_FROM`: a sender allowed by the Resend key's verified domain.
 - `APPLIANCE_RELEASE_SHA256`: digest of the customer download, not the inner archive.
 
-From this directory, run `docker compose up --build -d`. The backend explicitly
-initializes its schema before starting one application worker. Caddy terminates
-public HTTPS; the Python service has no public host port. Persistent volumes hold
-the licensing database and Caddy certificate state. Preserve and back up both
-the licensing database and signing key. Docker deployment is prepared but has
-not yet been executed on a real host.
+The dedicated-host Compose alternative also uses PostgreSQL. Provision distinct
+private `postgres-admin-password` and `postgres-app-password` files under
+`.local/hosted`, then follow the same maintenance/import sequence in POSTGRESQL.md,
+adapting the Docker network/mount names. It intentionally requires a verified
+SQLite import before the backend starts. For a genuinely new site with no prior
+accounts, explicitly review that fact before disabling REQUIRE_SQLITE_IMPORT.
+Caddy terminates public HTTPS; PostgreSQL has no public host port. Preserve and
+back up the database and signing key. The chosen VPS uses the Portainer stack
+behind CyberPanel instead of this Caddy alternative.
 
 ## Stripe webhook
 

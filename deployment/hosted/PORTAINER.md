@@ -1,5 +1,10 @@
 # Contabo / CyberPanel / LXD / Portainer handoff
 
+**Existing SQLite deployment:** follow `POSTGRESQL.md` before replacing the stack.
+The current stack is PostgreSQL-based and intentionally waits for verified data
+import. The older initial-deployment steps below describe the previous SQLite
+image; do not use them for the cutover.
+
 Target: Ubuntu 24.04 VPS with CyberPanel and an existing Docker endpoint inside
 an LXD container. This stack is for Docker Standalone, not Swarm. It is prepared,
 not deployed. The agent deploying it needs shell access to that Docker endpoint

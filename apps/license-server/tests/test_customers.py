@@ -24,7 +24,7 @@ PASSWORD = "correct-horse-prototype-42"
 
 
 @pytest.fixture
-def kit(tmp_path, monkeypatch):
+def kit(tmp_path, monkeypatch, database_engine):
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("DEVELOPMENT_MAIL_DIR", str(tmp_path / "mail"))
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_placeholder")
@@ -37,7 +37,7 @@ def kit(tmp_path, monkeypatch):
         serialization.NoEncryption()).decode())
     get_settings.cache_clear()
     monkeypatch.setattr(main, "settings", get_settings())
-    engine = create_engine("sqlite:///" + str(tmp_path / "test.db"), connect_args={"check_same_thread": False})
+    engine = database_engine
     Base.metadata.create_all(engine)
 
     def database():

@@ -43,7 +43,12 @@ def issue_token(db: Session, customer_id: str, purpose: str, minutes: int) -> st
 
 def valid_token(db: Session, token: str, purpose: str) -> CustomerToken:
     row = db.get(CustomerToken, digest(token))
-    if not row or row.purpose != purpose or row.expires_at.replace(tzinfo=timezone.utc) <= utcnow():
+    if not row or row.purpose != purpose:
+        raise HTTPException(401, "Invalid or expired token")
+    expires = row.expires_at
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if expires <= utcnow():
         raise HTTPException(401, "Invalid or expired token")
     return row
 

@@ -27,6 +27,17 @@ def migrate(database=engine):
         connection.execute(text('INSERT INTO bliss_schema_version (version) VALUES (1)'))
 
 
+def require_import(database=engine):
+    if 'bliss_sqlite_import' not in inspect(database).get_table_names():
+        raise RuntimeError('Backend withheld: verified SQLite import is required')
+    with database.connect() as connection:
+        if connection.execute(text('SELECT completed FROM bliss_sqlite_import')).scalar_one() != 1:
+            raise RuntimeError('Backend withheld: invalid import marker')
+
+
 if __name__ == '__main__':
     migrate()
+    from .config import get_settings
+    if get_settings().require_sqlite_import:
+        require_import()
     print('Licensing database schema version 1 ready')

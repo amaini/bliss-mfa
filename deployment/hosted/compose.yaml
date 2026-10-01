@@ -6,15 +6,39 @@ services:
     env_file: ../../.local/hosted/server.env
     environment:
       APP_ENV: production
-      DATABASE_URL: sqlite+pysqlite:////var/lib/bliss-license/licenses.db
+      DATABASE_URL: postgresql+psycopg://bliss_app@postgres:5432/bliss_license
+      DATABASE_PASSWORD_FILE: /run/secrets/postgres_app_password
+      REQUIRE_SQLITE_IMPORT: "true"
       SIGNING_PRIVATE_KEY_FILE: /run/bliss-keys/license-private.pem
       APPLIANCE_RELEASE_FILE: /run/bliss-release/windows.zip
     volumes:
-      - license-data:/var/lib/bliss-license
       - ../../.local/hosted/license-private.pem:/run/bliss-keys/license-private.pem:ro
       - ../../.local/deployment/bliss-mfa-windows-prototype.zip:/run/bliss-release/windows.zip:ro
     expose: ["8080"]
     command: ["sh", "-c", "python -m license_server.migrate && exec uvicorn license_server.main:app --host 0.0.0.0 --port 8080 --workers 1 --no-access-log"]
+    secrets: [postgres_app_password]
+    networks: [default, database]
+    depends_on:
+      postgres:
+        condition: service_healthy
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: bliss_license
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_admin_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    secrets: [postgres_admin_password, postgres_app_password]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-postgres.sh:/docker-entrypoint-initdb.d/10-bliss-app.sh:ro
+    networks: [database]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U postgres -d bliss_license"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
   tls:
     image: caddy:2
     restart: unless-stopped
@@ -25,6 +49,14 @@ services:
       - tls-config:/config
     depends_on: [license-server]
 volumes:
-  license-data:
+  postgres-data:
   tls-data:
   tls-config:
+networks:
+  database:
+    internal: true
+secrets:
+  postgres_admin_password:
+    file: ../../.local/hosted/postgres-admin-password
+  postgres_app_password:
+    file: ../../.local/hosted/postgres-app-password

@@ -1,21 +1,22 @@
-# Docker Standalone endpoint. Build bliss-license:prototype on that endpoint first.
+# Docker Standalone endpoint. Build bliss-license:postgres-v1 on that endpoint first.
 # Add private backend settings through Portainer's environment-variable form.
 services:
   license-server:
-    image: bliss-license:prototype
+    image: bliss-license:postgres-v1
     pull_policy: never
     restart: unless-stopped
     env_file: [stack.env]
     environment:
       APP_ENV: production
-      DATABASE_URL: sqlite+pysqlite:////var/lib/bliss-license/licenses.db
+      DATABASE_URL: postgresql+psycopg://bliss_app@postgres:5432/bliss_license
+      DATABASE_PASSWORD_FILE: /run/secrets/postgres_app_password
+      REQUIRE_SQLITE_IMPORT: "true"
       SIGNING_PRIVATE_KEY_FILE: /run/bliss-keys/license-private.pem
       APPLIANCE_RELEASE_FILE: /run/bliss-release/windows.zip
       CUSTOMER_PORTAL_URL: https://license.blissitek.ca
     ports:
       - "${BLISS_BIND_IP:?Set the LXD private IP reachable from CyberPanel}:18080:8080"
     volumes:
-      - license-data:/var/lib/bliss-license
       - type: bind
         source: /opt/bliss-mfa/private/license-private.pem
         target: /run/bliss-keys/license-private.pem
@@ -29,11 +30,47 @@ services:
         bind:
           create_host_path: false
     command: [sh, -c, "python -m license_server.migrate && exec uvicorn license_server.main:app --host 0.0.0.0 --port 8080 --workers 1 --no-access-log"]
+    secrets: [postgres_app_password]
+    networks: [default, database]
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: bliss_license
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_admin_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    secrets: [postgres_admin_password, postgres_app_password]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - type: bind
+        source: /opt/bliss-mfa/source-deployment/init-postgres.sh
+        target: /docker-entrypoint-initdb.d/10-bliss-app.sh
+        read_only: true
+        bind:
+          create_host_path: false
+    networks: [database]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U postgres -d bliss_license"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
 volumes:
-  license-data:
+  postgres-data:
+networks:
+  database:
+    internal: true
+secrets:
+  postgres_admin_password:
+    file: /opt/bliss-mfa/private/postgres-admin-password
+  postgres_app_password:
+    file: /opt/bliss-mfa/private/postgres-app-password

@@ -8,6 +8,8 @@ class Settings(BaseSettings):
 
     app_env: str = "development"
     database_url: str = "sqlite+pysqlite:///./licenses.db"
+    database_password_file: str | None = None
+    require_sqlite_import: bool = False
     admin_api_key: str | None = None
 
     # PEM encoded Ed25519 private key. Generate once and keep only in Bliss infrastructure.

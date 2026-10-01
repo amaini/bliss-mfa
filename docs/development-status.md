@@ -49,14 +49,21 @@ backend acceptance remain required before the public paid journey can run.
 - Public HTTPS health and client portal now return 200. The corrected product
   page is published. A live Stripe webhook was created with the required events;
   its signing secret is saved privately in the local server.env. The deployed
-  webhook route returns 503 because verification is not configured, so Portainer
-  must load that secret before a live purchase acceptance run.
+  webhook route now rejects unsigned payloads and accepts a locally signed
+  non-payment probe and repeat. Real Stripe payment delivery remains untested.
+- PostgreSQL hosted deployment and offline SQLite import are implemented. The
+  import preserves all account/license/payment tables, refuses populated targets,
+  verifies all copied values, and commits an import marker atomically. Startup
+  requires that marker. A non-superuser application login and private database
+  network are configured; live cutover requires the deployment agent.
 
 ## Validation in this pass
 
 - Appliance API: 19 tests pass.
 - Adapter/native/proxy: 41 tests pass.
-- Central licensing/customer/mail/migration/download: 21 tests pass.
+- Central licensing/customer/mail/migration/download/import: 29 tests pass on real
+  PostgreSQL. Restricted-role initialization/import and pg_dump/pg_restore into
+  a separate database pass. A PostgreSQL-aware token timezone fix is included.
 - Encrypted backup: 6 tests pass.
 - Isolated real native TLS/CGI fresh/replay/incorrect OTP checks pass.
 - Portal production build, PHP syntax, and PowerShell installer parsing pass.
@@ -70,8 +77,9 @@ RADIUS, SID, outage, and scheduled-task results remain in the first-deployment r
 
 ## Remaining acceptance and deployment
 
-- Load the newly created live webhook signing secret into the deployed backend,
-  verify real signed Stripe delivery, and complete payment-to-activation acceptance.
+- Perform the PostgreSQL cutover using deployment/hosted/POSTGRESQL.md, preserving
+  existing accounts and the signing key; verify an existing login and backup.
+- Verify real signed Stripe delivery and complete payment-to-activation acceptance.
   Email registration, paid installer availability, and deployed private-key/release
   mounts still need acceptance beyond the passing public health endpoint.
 - Complete human first-owner setup on the VM.
