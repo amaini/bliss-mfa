@@ -31,7 +31,8 @@ export default function AdministratorsPage() {
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       await api<Admin>("/admins", {
         method: "POST",
@@ -42,7 +43,7 @@ export default function AdministratorsPage() {
           role: String(form.get("role") ?? "operator"),
         }),
       });
-      event.currentTarget.reset();
+      formElement.reset();
       setShowNew(false);
       await load();
     } catch (err) {
@@ -77,6 +78,7 @@ export default function AdministratorsPage() {
 
       {showNew ? (
         <form className="card formCard" onSubmit={create}>
+          <div className="formHeading"><h2>New administrator</h2><p className="muted">Choose the access this management account needs.</p></div>
           <label>Email<input name="email" type="email" required /></label>
           <label>Display name<input name="display_name" /></label>
           <label>Temporary password<input name="password" type="password" minLength={12} required /></label>
