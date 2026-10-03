@@ -1,6 +1,6 @@
 import base64
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -28,7 +28,7 @@ def test_signed_lease_is_bound_to_installation(tmp_path, monkeypatch):
     get_settings.cache_clear()
 
     state = LicenseState(str(tmp_path))
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "v": 1,
         "license_id": "lic_test",
@@ -59,7 +59,7 @@ def test_tampered_lease_is_rejected(tmp_path, monkeypatch):
     get_settings.cache_clear()
 
     state = LicenseState(str(tmp_path))
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "v": 1,
         "license_id": "lic_test",
@@ -98,7 +98,7 @@ def test_identity_bound_rdp_seat_enforcement(tmp_path, monkeypatch):
     get_settings.cache_clear()
 
     state = LicenseState(str(tmp_path))
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "v": 1,
         "license_id": "lic_seats",
@@ -136,7 +136,7 @@ def test_restricted_license_cannot_reserve_new_seat(tmp_path, monkeypatch):
     get_settings.cache_clear()
 
     state = LicenseState(str(tmp_path))
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "v": 1,
         "license_id": "lic_expired",
@@ -168,7 +168,7 @@ def test_offline_release_code_can_be_recovered(tmp_path, monkeypatch):
     get_settings.cache_clear()
 
     state = LicenseState(str(tmp_path))
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "v": 1,
         "license_id": "lic_offline_release",

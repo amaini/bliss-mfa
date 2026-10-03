@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 
+
 class OnlineActivationRequest(BaseModel):
     activation_code: str = Field(min_length=12, max_length=200)
 
