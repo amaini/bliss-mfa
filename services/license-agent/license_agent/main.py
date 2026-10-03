@@ -18,7 +18,6 @@ from .schemas import (
 from .security import require_local_auth
 from .state import LicenseState
 
-
 app = FastAPI(
     title="Bliss Secure MFA License Agent",
     version="0.1.0",
@@ -50,7 +49,7 @@ def activate_online(payload: OnlineActivationRequest) -> dict:
 def heartbeat(payload: HeartbeatInput) -> dict:
     try:
         return client.heartbeat(state.seat_count(), payload.audit_head_hash)
-    except HTTPError as exc:
+    except HTTPError:
         # A failed heartbeat does not erase the last valid signed lease. The
         # effective status endpoint will move through offline_grace/restricted.
         current = state.effective_status()

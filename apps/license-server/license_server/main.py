@@ -4,7 +4,7 @@ import base64
 import hashlib
 import json
 import secrets
-from datetime import timedelta, timezone
+from datetime import UTC, timedelta
 
 import stripe
 from cryptography.exceptions import InvalidSignature
@@ -34,7 +34,6 @@ from .schemas import (
     StripeLinkRequest,
 )
 from .security import require_admin
-
 
 settings = get_settings()
 app = FastAPI(title="Bliss Secure MFA License Server", version="0.1.0")
@@ -139,7 +138,7 @@ def get_active_challenge(
         raise HTTPException(status_code=401, detail="Invalid challenge")
     expires = row.expires_at
     if expires.tzinfo is None:
-        expires = expires.replace(tzinfo=timezone.utc)
+        expires = expires.replace(tzinfo=UTC)
     if expires < utcnow():
         raise HTTPException(status_code=401, detail="Challenge expired")
     return row
