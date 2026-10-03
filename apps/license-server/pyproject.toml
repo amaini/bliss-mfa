@@ -23,3 +23,7 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI dependency declarations are intentionally evaluated in defaults.
+extend-immutable-calls = ["fastapi.Depends"]

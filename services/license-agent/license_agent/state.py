@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import base64
-import json
 import hashlib
+import json
 import os
 import platform
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +30,7 @@ def canonical_json(payload: dict[str, Any]) -> bytes:
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class LicenseState:
@@ -185,7 +185,8 @@ class LicenseState:
         signature = b64url_decode(outer["signature"])
         key = serialization.load_pem_public_key(pem.encode())
         if not isinstance(key, Ed25519PublicKey):
-            raise RuntimeError("Bliss signing public key must be Ed25519")
+            # The API reports configuration failures as RuntimeError.
+            raise RuntimeError("Bliss signing public key must be Ed25519")  # noqa: TRY004
         try:
             key.verify(signature, payload_bytes)
         except InvalidSignature as exc:
@@ -332,7 +333,7 @@ class LicenseState:
 
 
 def parse_time(value: str) -> datetime:
-    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    parsed = datetime.fromisoformat(value)
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)

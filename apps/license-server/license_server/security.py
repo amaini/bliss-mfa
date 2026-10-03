@@ -1,6 +1,9 @@
 import hmac
+
 from fastapi import Header, HTTPException, status
+
 from .config import get_settings
+
 
 def require_admin(x_bliss_license_admin: str | None = Header(default=None)) -> None:
     configured = get_settings().admin_api_key
