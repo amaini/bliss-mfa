@@ -91,7 +91,7 @@ with zipfile.ZipFile(args.output, 'w', zipfile.ZIP_DEFLATED) as release:
     # Already compressed; avoid a second costly compression pass.
     release.write(args.archive, 'BlissMFA-Appliance.zip', compress_type=zipfile.ZIP_STORED)
     release.writestr('Install-BlissEngine.ps1', (REPO / 'scripts/Install-BlissEngine.ps1').read_bytes())
-    for name in ('Install-WindowsIntegration.ps1', 'Uninstall-BlissMFA.ps1'):
+    for name in ('Install-WindowsIntegration.ps1', 'Uninstall-BlissMFA.ps1', 'Update-BlissMFA.ps1', 'client-update.py'):
         release.writestr(name, (REPO / 'scripts' / name).read_bytes())
     release.writestr('Setup-BlissMFA.ps1', setup)
     release.writestr('Enable-RdpProtection.ps1', enable)
