@@ -35,14 +35,42 @@ def current_subscription(subscription_id: str) -> dict:
     return stripe.Subscription.retrieve(subscription_id, expand=["latest_invoice"], **stripe_options())
 
 
+def canceled_customer_license(db: Session, binding: CustomerLicense) -> License:
+    license = db.get(License, binding.license_id)
+    if not license or license.status == LicenseStatus.revoked:
+        raise HTTPException(409, "This license requires support before a new subscription")
+    previous = current_subscription(binding.subscription_id)
+    if identifier(previous.get("customer")) != license.stripe_customer_id:
+        raise HTTPException(409, "Subscription customer mismatch")
+    if previous.get("status") != "canceled":
+        raise HTTPException(409, "Manage your existing subscription through billing")
+    return license
+
+
 def reconcile_subscription(db: Session, subscription_id: str) -> None:
     binding = db.scalar(select(CustomerLicense).where(CustomerLicense.subscription_id == subscription_id))
     if not binding:
         return
+    # Serialize reconciliation with replacement Checkout fulfillment. Re-read
+    # the binding after acquiring the customer lock: an old event might have
+    # waited while a returning customer switched to a new subscription.
+    db.execute(update(Customer).where(Customer.id == binding.customer_id).values(
+        company_name=Customer.company_name))
+    binding = db.scalar(select(CustomerLicense).where(
+        CustomerLicense.subscription_id == subscription_id
+    ).execution_options(populate_existing=True))
+    if not binding:
+        return
+    db.execute(update(License).where(License.id == binding.license_id).values(
+        updated_at=License.updated_at))
     license = db.get(License, binding.license_id)
+    db.refresh(license)
     subscription = current_subscription(subscription_id)
     if identifier(subscription.get("customer")) != license.stripe_customer_id:
         raise HTTPException(409, "Subscription customer mismatch")
+    if license.status == LicenseStatus.revoked:
+        db.add(ActivationEvent(license_id=license.id, event_type="billing.revoked_license_preserved"))
+        return
     state = subscription.get("status")
     invoice = subscription.get("latest_invoice")
     if state == "active" and isinstance(invoice, dict) and invoice.get("status") == "paid":
@@ -76,6 +104,13 @@ def fulfill_checkout(db: Session, session_id: str) -> Purchase | None:
     subscription_id = identifier(session.get("subscription"))
     if not subscription_id:
         raise HTTPException(409, "Paid checkout has no subscription")
+    binding = db.scalar(select(CustomerLicense).where(
+        CustomerLicense.customer_id == purchase.customer_id
+    ).execution_options(populate_existing=True))
+    if purchase.status == "fulfilled" and binding and binding.subscription_id != subscription_id:
+        # A late replay from an earlier paid checkout must never rebind the
+        # appliance away from a subsequent subscription.
+        return purchase
     subscription = current_subscription(subscription_id)
     if identifier(subscription.get("customer")) != identifier(session.get("customer")):
         raise HTTPException(409, "Checkout customer mismatch")
@@ -86,10 +121,21 @@ def fulfill_checkout(db: Session, session_id: str) -> Purchase | None:
             raise HTTPException(409, "Checkout seat quantity mismatch")
     customer = db.get(Customer, purchase.customer_id)
     db.execute(update(Customer).where(Customer.id == customer.id).values(company_name=customer.company_name))
-    binding = db.get(CustomerLicense, purchase.customer_id)
+    binding = db.scalar(select(CustomerLicense).where(
+        CustomerLicense.customer_id == purchase.customer_id
+    ).execution_options(populate_existing=True))
+    if purchase.status == "fulfilled" and binding and binding.subscription_id != subscription_id:
+        return purchase
     if binding:
         if binding.subscription_id != subscription_id:
-            raise HTTPException(409, "Customer already owns another subscription")
+            license = canceled_customer_license(db, binding)
+            if identifier(session.get("customer")) != license.stripe_customer_id:
+                raise HTTPException(409, "Replacement checkout customer mismatch")
+            binding.subscription_id = subscription_id
+            license.stripe_subscription_id = subscription_id
+            db.add(ActivationEvent(license_id=license.id, event_type="billing.customer_resubscribed",
+                                   detail=digest(session_id)))
+            db.flush()
     else:
         trial = db.get(CustomerTrial, customer.id)
         license = db.get(License, trial.license_id) if trial else None

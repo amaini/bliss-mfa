@@ -25,6 +25,12 @@ authentication. Uninstalling protection does not cancel billing; customers use
 the billing portal to cancel. Passwords, MFA seeds and authentication traffic
 stay in the customer environment.
 
+After a completed cancellation, customers can subscribe again and retain their
+existing appliance. Active or overdue subscriptions are managed through billing
+to avoid duplicate purchases. Use **Refresh subscription status** if a billing
+change is not yet reflected. Administrator-revoked licenses require support;
+payment does not reverse that revocation.
+
 ## Acceptance before taking pilot customers
 
 Record exact source commit, artifact SHA256, Windows edition/build, provider
