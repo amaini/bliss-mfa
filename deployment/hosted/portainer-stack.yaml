@@ -13,10 +13,17 @@ services:
       REQUIRE_SQLITE_IMPORT: "true"
       SIGNING_PRIVATE_KEY_FILE: /run/bliss-keys/license-private.pem
       APPLIANCE_RELEASE_FILE: /run/bliss-release/windows.zip
+      APPLIANCE_UPDATE_DIRECTORY: /run/bliss-updates
       CUSTOMER_PORTAL_URL: https://license.blissitek.ca
     ports:
       - "${BLISS_BIND_IP:?Set the LXD private IP reachable from CyberPanel}:18080:8080"
     volumes:
+      - type: bind
+        source: /opt/bliss-mfa/releases/updates
+        target: /run/bliss-updates
+        read_only: true
+        bind:
+          create_host_path: false
       - type: bind
         source: /opt/bliss-mfa/private/license-private.pem
         target: /run/bliss-keys/license-private.pem

@@ -11,7 +11,14 @@ services:
       REQUIRE_SQLITE_IMPORT: "true"
       SIGNING_PRIVATE_KEY_FILE: /run/bliss-keys/license-private.pem
       APPLIANCE_RELEASE_FILE: /run/bliss-release/windows.zip
+      APPLIANCE_UPDATE_DIRECTORY: /run/bliss-updates
     volumes:
+      - type: bind
+        source: ../../.local/deployment/public-updates
+        target: /run/bliss-updates
+        read_only: true
+        bind:
+          create_host_path: false
       - ../../.local/hosted/license-private.pem:/run/bliss-keys/license-private.pem:ro
       - ../../.local/deployment/bliss-mfa-windows-prototype.zip:/run/bliss-release/windows.zip:ro
     expose: ["8080"]

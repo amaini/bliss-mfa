@@ -42,9 +42,11 @@ disposable Windows VM, including fresh, incorrect and empty OTP, before publishi
 Upload the immutable ZIP first. Atomically replace public `stable.json` with the
 signed JSON only after the upload is complete. Retain earlier release ZIPs.
 
-The Docker deployment agent must mount a dedicated **public-only** releases
-directory read-only and set `APPLIANCE_UPDATE_DIRECTORY` to its container path,
-for example `/releases/updates`. The licensing app exposes that directory at
+The supplied hosted stacks mount a dedicated **public-only** releases
+directory read-only at `/run/bliss-updates` and set `APPLIANCE_UPDATE_DIRECTORY`
+accordingly. Create `/opt/bliss-mfa/releases/updates` for Portainer, or
+`.local/deployment/public-updates` for dedicated-host Compose, before deployment.
+An empty directory is safe: it does not advertise any release. The licensing app exposes that directory at
 `/updates`. Do not put server.env, private signing keys, customer databases, or
 backups in this directory. No website-agent changes are required for this feed.
 

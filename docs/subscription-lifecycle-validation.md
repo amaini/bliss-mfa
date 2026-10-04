@@ -39,7 +39,7 @@ thread so an incoming webhook does not freeze the public portal event loop.
 - Local browser probe and disposable PostgreSQL processes were stopped; bootstrap
   password files removed. Isolated database evidence remains protected locally.
 
-The final PostgreSQL evidence is `.local/pg-pilot-d8d39c87/tests.log` in the
+The latest PostgreSQL evidence is `.local/pg-pilot-c252be66/tests.log` in the
 primary checkout. This validates source behavior against PostgreSQL with mocked
 Stripe API objects. It does not prove Stripe test-mode/live delivery or current
 production deployment. No central database schema change was required.
@@ -47,8 +47,9 @@ production deployment. No central database schema change was required.
 ## Deployment and launch status
 
 These changes affect the hosted licensing backend and its customer page. The
-Windows 0.1.2 installer/update ZIPs from the earlier validation are unchanged:
-the hosted server is not embedded in those archives. Build the licensing image
+hosted server is not embedded in the Windows archives. The current Windows
+0.1.2 archives were rebuilt after the full service lint cleanup; use the current
+hashes in `pilot-release-0.1.2-validation.md`. Build the licensing image
 from this updated source and preserve the deployed PostgreSQL volume and existing
 licensing private key. Confirm cancellation/renewal/returning-customer behavior
 with Stripe test-mode acceptance before public launch.
