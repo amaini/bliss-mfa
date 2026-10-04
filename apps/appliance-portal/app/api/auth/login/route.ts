@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { hasTrustedOrigin } from "@/lib/request-origin";
 
 export async function POST(request: NextRequest) {
+  if (!hasTrustedOrigin(request)) {
+    return NextResponse.json({ detail: "Invalid origin" }, { status: 403 });
+  }
   const api = process.env.APPLIANCE_API_URL;
   if (!api) return NextResponse.json({ error: "API not configured" }, { status: 503 });
 
