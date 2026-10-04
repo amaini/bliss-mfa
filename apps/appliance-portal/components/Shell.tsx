@@ -1,27 +1,30 @@
+"use client";
+
 import type { ReactNode } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+const navigation = [["/", "Dashboard"], ["/onboarding", "Get started"], ["/users", "RDP Users"], ["/administrators", "Administrators"], ["/audit", "Audit"], ["/license", "License & Billing"]] as const;
 
 export function Shell({ title, children }: { title: string; children: ReactNode }) {
+  const pathname = usePathname();
   return (
-    <main className="shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <span className="brandMark">B</span>
+    <div className="shell">
+      <header className="topBar">
+        <Link className="brand" href="/" aria-label="Bliss Secure MFA dashboard">
+          <span className="brandMark" aria-hidden="true">B</span>
           <div><strong>Bliss Secure MFA</strong><small>Local Appliance</small></div>
-        </div>
-        <nav>
-          <a href="/">Dashboard</a>
-          <a href="/onboarding">Get started</a>
-          <a href="/users">RDP Users</a>
-          <a href="/administrators">Administrators</a>
-          <a href="/audit">Audit</a>
-          <a href="/license">License & Billing</a>
+        </Link>
+        <nav aria-label="Main navigation">
+          {navigation.map(([href, label]) => <Link key={href} href={href} aria-current={pathname === href ? "page" : undefined}>{label}</Link>)}
         </nav>
         <a className="signout" href="/api/auth/logout">Sign out</a>
-      </aside>
-      <section className="content">
-        <header><p className="eyebrow">Local management</p><h1>{title}</h1></header>
+      </header>
+      <main className="content" id="main-content">
+        <header className="pageHeader"><p className="eyebrow">Local management</p><h1>{title}</h1></header>
         {children}
-      </section>
-    </main>
+      </main>
+      <footer className="footer">Bliss Secure MFA · Local management console</footer>
+    </div>
   );
 }
