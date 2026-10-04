@@ -32,15 +32,15 @@ customer acceptance. Main and deployed customer artifacts were not replaced.
 | Check | Result |
 |---|---|
 | Appliance API, schema preservation and invalid state transitions | 34 passed |
-| Licensing, customer, trial, payment and feed regression suite | 38 passed, 1 optional PostgreSQL integration skipped |
+| Licensing, customer, trial, payment and feed regression suite | 53 passed on real PostgreSQL; SQLite 51 passed and 2 PostgreSQL cases skipped |
 | Updater, backup, packaging and signing-key tests | 38 passed |
 | Licensing agent | 10 passed |
 | Engine adapter/native/proxy | 41 passed |
 | Next.js portal production build and TypeScript | Passed, 15.5.27 |
 | Real HTTP portal origin checks | 18/18 passed |
 | Exact packaged local onboarding | 11/11 passed |
-| Exact packaged engine via native TLS/CGI | Fresh OTP passed; replay and incorrect OTP denied |
-| Focused Ruff and whitespace checks | Passed |
+| Prior packaged engine via native TLS/CGI | Fresh OTP passed; replay and incorrect OTP denied; repeat on current candidate during VM acceptance |
+| Full service Ruff and whitespace checks | Passed |
 | Artifact manifest, signature, keys and configured-secret verification | Passed, 4209 appliance files and 2084 update files |
 
 The packaged onboarding used embedded runtimes and isolated ports/state. The
@@ -55,20 +55,23 @@ The first failed extraction is retained privately as evidence.
 
 ## Local candidate artifacts
 
-Private staging directory: `.local/pilot-release-0.1.2` in the primary checkout.
+Current private staging directory: `.local/pilot-release-0.1.2-ci` in the primary checkout.
+Built application source: `618e1c2d6bade38acde920a1255da00ff51c1370`.
+All seven [GitHub Appliance CI jobs](https://github.com/amaini/bliss-mfa/actions/runs/37237072163) passed on this source commit.
+The earlier `.local/pilot-release-0.1.2` candidate is retained privately and superseded.
 These files are built and verified locally, not published customer downloads.
 
 | Artifact | SHA256 |
 |---|---|
-| appliance-deployment-0.1.2.zip | cdc697236d72e4c99005c9fab5000beea5c550ae3dc67b2af7d6f41d5dc956ce |
-| bliss-mfa-windows-pilot-0.1.2.zip | 56e2b5543196189f7a1b2c537e79d59a057e67f6cbbdf651872976a771643d1d |
-| bliss-mfa-update-0.1.2.zip | 014b14d1b9840eba43db30031f301118a58b2c35d75296c5aaef3ddac3f467b6 |
+| appliance-deployment-0.1.2.zip | b2f1767f2edb7a5c09d02c3eaac6262cc780b1850665756d7ce7e5014213d14a |
+| bliss-mfa-windows-pilot-0.1.2.zip | 771f09e340e2c052b6d1bcbea8a5d73d05f8f1c5a71a587245f9722cb60d621c |
+| bliss-mfa-update-0.1.2.zip | 6e10c494da8bf4b3fcab3a17ac29eb209fd62ead7c24d998f29ee6444c0dc518 |
 
 The detached signed feed is `bliss-mfa-update-0.1.2.signed.json` beside the ZIP.
 Update public PEM SHA256:
 `6d37a5b11ad0bb606d2c65ed10c98ea437b8e9503937a6a9382ce001ad153d42`.
 Verification output is `verification.json`; packaged onboarding output is
-`package-acceptance-ready/verification-results.json`.
+`package-acceptance/verification-results.json`.
 
 ## Read-only public checks and remaining acceptance
 
@@ -91,3 +94,9 @@ Verification output is `verification.json`; packaged onboarding output is
 See `windows-paid-pilot.md` for the pilot journey, remaining acceptance and
 operations requirements. These pending items prevent declaring the product
 ready for paid customers.
+
+The full lint cleanup preserves external-response error handling and declares FastAPI
+dependency metadata safe in defaults. Current PostgreSQL evidence is
+`.local/pg-pilot-c252be66/tests.log`, run with a non-superuser database role.
+Subscription replacement preserves the installed license identity, rejects duplicate
+active purchases and retains administrator revocation; see `subscription-lifecycle-validation.md`.
