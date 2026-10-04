@@ -17,6 +17,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--appliance', action='store_true')
 parser.add_argument('--portal-build', type=Path)
 parser.add_argument('--node', type=Path)
+parser.add_argument('--version', default='0.1.1')
 args = parser.parse_args()
 if args.appliance and (not args.portal_build or not args.node):
     parser.error('Appliance packaging requires --portal-build and --node')
@@ -72,6 +73,13 @@ with zipfile.ZipFile(OUTPUT, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
     add(archive, 'installers/WINSW-LICENSE', (INPUT / 'WINSW-LICENSE').read_bytes())
     tree(archive, REPO / 'services/multiotp-adapter/adapter', 'bliss-mfa/services/multiotp-adapter/adapter')
     if args.appliance:
+        import re
+        if not re.fullmatch(r'\d+\.\d+\.\d+', args.version):
+            raise ValueError('Version must be major.minor.patch')
+        add(archive, 'bliss-mfa/deployment/release-version.json', json.dumps({'version': args.version}).encode())
+        for name in ('Install-WindowsIntegration.ps1', 'Uninstall-BlissMFA.ps1', 'Update-BlissMFA.ps1', 'client-update.py'):
+            add(archive, 'bliss-mfa/scripts/' + name, (REPO / 'scripts' / name).read_bytes())
+        add(archive, 'bliss-mfa/deployment/update-public.pem', (INPUT / 'update-public.pem').read_bytes())
         tree(archive, REPO / 'apps/appliance-api/appliance', 'bliss-mfa/apps/appliance-api/appliance')
         tree(archive, REPO / 'services/license-agent/license_agent', 'bliss-mfa/services/license-agent/license_agent')
         tree(archive, args.portal_build / '.next/standalone', 'portal')

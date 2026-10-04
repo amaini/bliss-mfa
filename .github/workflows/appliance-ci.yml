@@ -10,6 +10,7 @@ on:
       - "services/multiotp-mock/**"
       - "services/multiotp-adapter/**"
       - ".github/workflows/appliance-ci.yml"
+      - "scripts/**"
   push:
     branches: [main]
     paths:
@@ -20,8 +21,23 @@ on:
       - "services/multiotp-mock/**"
       - "services/multiotp-adapter/**"
       - ".github/workflows/appliance-ci.yml"
+      - "scripts/**"
 
 jobs:
+  client-updater:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest cryptography httpx ruff
+      - run: ruff check --select E4,E7,E9,F scripts/client-update.py scripts/publish-client-update.py scripts/tests/test_client_update.py
+      - run: pytest -q scripts/tests/test_client_update.py
+
   multiotp-adapter:
     runs-on: ubuntu-latest
     defaults:
