@@ -11,6 +11,7 @@ on:
       - "services/multiotp-adapter/**"
       - ".github/workflows/appliance-ci.yml"
       - "scripts/**"
+      - "tools/check_portal_origins.py"
   push:
     branches: [main]
     paths:
@@ -22,6 +23,7 @@ on:
       - "services/multiotp-adapter/**"
       - ".github/workflows/appliance-ci.yml"
       - "scripts/**"
+      - "tools/check_portal_origins.py"
 
 jobs:
   client-updater:
@@ -111,6 +113,11 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
-          cache-dependency-path: apps/appliance-portal/package.json
-      - run: npm install
+          cache-dependency-path: apps/appliance-portal/package-lock.json
+      - run: npm ci
       - run: npm run build
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "httpx>=0.28,<1"
+      - run: python ../../tools/check_portal_origins.py --portal . --output ../../outputs/portal-origin-results.json

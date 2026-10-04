@@ -33,20 +33,25 @@ def test_completion_requires_enrollment_and_owner_confirmation(kit):
     client, db, license = kit
     assert client.get('/v1/onboarding').json()['complete'] is False
     user = MfaUser(username='example', engine_username='example', status=UserStatus.pending)
-    db.add(user); db.commit()
+    db.add(user)
+    db.commit()
     assert client.post(f'/v1/onboarding/rdp/{user.id}').status_code == 409
-    user.status = UserStatus.active; db.commit()
+    user.status = UserStatus.active
+    db.commit()
     assert client.get('/v1/onboarding').json()['complete'] is False
     assert client.post(f'/v1/onboarding/rdp/{user.id}').status_code == 200
     assert client.get('/v1/onboarding').json()['complete'] is True
-    user.status = UserStatus.revoked; db.commit()
+    user.status = UserStatus.revoked
+    db.commit()
     assert client.get('/v1/onboarding').json()['complete'] is False
 
 
 def test_restricted_license_cannot_complete_onboarding(kit):
     client, db, license = kit
     user = MfaUser(username='example', engine_username='example', status=UserStatus.active)
-    db.add(user); db.commit(); license['state'] = 'restricted'
+    db.add(user)
+    db.commit()
+    license['state'] = 'restricted'
     assert client.post(f'/v1/onboarding/rdp/{user.id}').status_code == 403
     assert client.get('/v1/onboarding').json()['complete'] is False
 
