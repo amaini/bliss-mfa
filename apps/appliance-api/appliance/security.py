@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from argon2 import PasswordHasher
@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 from .config import get_settings
 from .db import get_db
 from .models import AdminRole, LocalAdmin
-
 
 hasher = PasswordHasher()
 
@@ -37,7 +36,7 @@ def verify_password(password_hash: str, password: str) -> bool:
 
 def issue_token(admin: LocalAdmin) -> str:
     settings = get_settings()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return jwt.encode(
         {
             "sub": admin.id,

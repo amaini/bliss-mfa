@@ -4,7 +4,7 @@ import enum
 import hashlib
 import json
 import secrets
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, DateTime, Enum, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -13,7 +13,7 @@ from .db import Base
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def new_id(prefix: str) -> str:
@@ -98,8 +98,8 @@ def event_digest(
 ) -> str:
     normalized_created_at = created_at
     if normalized_created_at.tzinfo is None:
-        normalized_created_at = normalized_created_at.replace(tzinfo=timezone.utc)
-    normalized_created_at = normalized_created_at.astimezone(timezone.utc)
+        normalized_created_at = normalized_created_at.replace(tzinfo=UTC)
+    normalized_created_at = normalized_created_at.astimezone(UTC)
 
     payload = json.dumps(
         {

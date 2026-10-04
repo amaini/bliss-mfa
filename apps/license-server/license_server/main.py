@@ -4,7 +4,7 @@ import base64
 import hashlib
 import json
 import secrets
-from datetime import timedelta, timezone
+from datetime import UTC, timedelta
 
 import stripe
 from cryptography.exceptions import InvalidSignature
@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .crypto import canonical_json, iso, sign_payload
+from .customer_routes import router as customer_router
 from .db import Base, engine, get_db
 from .models import ActivationEvent, Challenge, License, LicenseStatus, LicenseType, utcnow
 from .schemas import (
@@ -34,9 +35,7 @@ from .schemas import (
     StripeLinkRequest,
 )
 from .security import require_admin
-from .customer_routes import router as customer_router
 from .updates import mount_update_feed
-
 
 settings = get_settings()
 app = FastAPI(title="Bliss Secure MFA License Server", version="0.1.0")
@@ -153,7 +152,7 @@ def get_active_challenge(
         raise HTTPException(status_code=401, detail="Invalid challenge")
     expires = row.expires_at
     if expires.tzinfo is None:
-        expires = expires.replace(tzinfo=timezone.utc)
+        expires = expires.replace(tzinfo=UTC)
     if expires < utcnow():
         raise HTTPException(status_code=401, detail="Challenge expired")
     return row

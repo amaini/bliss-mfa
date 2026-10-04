@@ -1,6 +1,6 @@
 import json
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -16,7 +16,7 @@ def licensed_state(tmp_path, monkeypatch, status="active", expired=False):
         serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo).decode())
     get_settings.cache_clear()
     state = LicenseState(str(tmp_path))
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {"installation_id": state.installation_id(), "license_id": "lic_concurrent",
                "license_type": "online", "state": status, "max_rdp_users": 3,
                "issued_at": (now - timedelta(days=2)).isoformat(),

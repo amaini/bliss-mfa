@@ -1,7 +1,7 @@
 import hashlib
 import secrets
 import smtplib
-from datetime import timedelta, timezone
+from datetime import UTC, timedelta
 from email.message import EmailMessage
 from pathlib import Path
 
@@ -47,7 +47,7 @@ def valid_token(db: Session, token: str, purpose: str) -> CustomerToken:
         raise HTTPException(401, "Invalid or expired token")
     expires = row.expires_at
     if expires.tzinfo is None:
-        expires = expires.replace(tzinfo=timezone.utc)
+        expires = expires.replace(tzinfo=UTC)
     if expires <= utcnow():
         raise HTTPException(401, "Invalid or expired token")
     return row
@@ -88,7 +88,7 @@ def send_account_mail(email: str, token: str, purpose: str) -> None:
                 timeout=15, trust_env=False)
             response.raise_for_status()
             if not isinstance(response.json().get('id'), str):
-                raise ValueError('Missing email delivery identifier')
+                raise ValueError('Missing email delivery identifier')  # noqa: TRY004 - invalid provider response
         except (httpx.HTTPError, ValueError, AttributeError):
             # Provider errors can contain customer email or private verification links.
             raise HTTPException(503, 'Email delivery is temporarily unavailable. Try again later.') from None

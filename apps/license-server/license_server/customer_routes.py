@@ -28,11 +28,24 @@ from .customer_auth import (
     send_account_mail,
     valid_token,
 )
-from .customer_models import Customer, CustomerLicense, CustomerToken, CustomerTrial, PaymentEvent, Purchase
+from .customer_models import (
+    Customer,
+    CustomerLicense,
+    CustomerToken,
+    CustomerTrial,
+    PaymentEvent,
+    Purchase,
+)
 from .db import get_db
 from .models import ActivationEvent, License, LicenseStatus, LicenseType, utcnow
+from .payments import (
+    canceled_customer_license,
+    fulfill_checkout,
+    identifier,
+    reconcile_subscription,
+    stripe_options,
+)
 from .trials import entitlement_status, expiry
-from .payments import canceled_customer_license, fulfill_checkout, identifier, reconcile_subscription, stripe_options
 
 router = APIRouter()
 _attempts: dict[str, list[float]] = {}

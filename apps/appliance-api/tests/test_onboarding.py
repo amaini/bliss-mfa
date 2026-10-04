@@ -30,7 +30,7 @@ def kit(monkeypatch):
 
 
 def test_completion_requires_enrollment_and_owner_confirmation(kit):
-    client, db, license = kit
+    client, db, _license = kit
     assert client.get('/v1/onboarding').json()['complete'] is False
     user = MfaUser(username='example', engine_username='example', status=UserStatus.pending)
     db.add(user)
@@ -47,11 +47,11 @@ def test_completion_requires_enrollment_and_owner_confirmation(kit):
 
 
 def test_restricted_license_cannot_complete_onboarding(kit):
-    client, db, license = kit
+    client, db, _license = kit
     user = MfaUser(username='example', engine_username='example', status=UserStatus.active)
     db.add(user)
     db.commit()
-    license['state'] = 'restricted'
+    _license['state'] = 'restricted'
     assert client.post(f'/v1/onboarding/rdp/{user.id}').status_code == 403
     assert client.get('/v1/onboarding').json()['complete'] is False
 

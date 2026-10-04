@@ -372,7 +372,7 @@ def list_windows_users(
         if isinstance(rows, dict):
             rows = [rows]
         if not isinstance(rows, list):
-            raise ValueError("unexpected account list")
+            raise ValueError("unexpected account list")  # noqa: TRY004 - invalid external JSON
         enrolled = {username.casefold() for username in db.scalars(select(MfaUser.username))}
         return [
             {

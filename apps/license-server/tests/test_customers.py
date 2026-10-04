@@ -3,6 +3,7 @@ import hmac
 import json
 import re
 import time
+from datetime import UTC
 
 import pytest
 import stripe
@@ -14,11 +15,17 @@ from sqlalchemy.orm import Session
 
 from license_server import customer_routes, main
 from license_server.config import get_settings
-from license_server.customer_models import Customer, CustomerLicense, CustomerToken, PaymentEvent, Purchase
-from license_server.db import Base, get_db
-from license_server.models import License
 from license_server.crypto import canonical_json
+from license_server.customer_models import (
+    Customer,
+    CustomerLicense,
+    CustomerToken,
+    PaymentEvent,
+    Purchase,
+)
+from license_server.db import Base, get_db
 from license_server.main import b64url_decode
+from license_server.models import License
 
 PASSWORD = "correct-horse-prototype-42"
 
@@ -72,7 +79,7 @@ def kit(tmp_path, monkeypatch, database_engine):
 def register(kit, email="owner@example.com"):
     client, _, root, _ = kit
     assert client.post("/v1/customer/register", json={"email": email, "password": PASSWORD, "company_name": "Test Office"}).status_code == 202
-    message = sorted((root / "mail").glob("*.eml"), key=lambda p: p.stat().st_mtime_ns)[-1].read_text()
+    message = max((root / "mail").glob("*.eml"), key=lambda p: p.stat().st_mtime_ns).read_text()
     # EmailMessage wraps long lines using quoted-printable.
     from email import policy
     from email.parser import Parser
@@ -304,7 +311,8 @@ def test_signing_failure_preserves_activation_code(kit, monkeypatch):
 
 
 def test_trial_is_verified_one_time_and_downloads_without_payment(kit, monkeypatch):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
+
     from license_server.customer_models import CustomerTrial
     client, engine, root, _ = kit
     assert client.post('/v1/customer/trial', json={}).status_code == 401
@@ -312,11 +320,11 @@ def test_trial_is_verified_one_time_and_downloads_without_payment(kit, monkeypat
     assert client.post('/v1/customer/login', json={'email':'owner@example.com','password':PASSWORD}).status_code == 403
     # Use another verified account because registration above intentionally remains unverified.
     account(kit, 'trial@example.com')
-    before = datetime.now(timezone.utc)
+    before = datetime.now(UTC)
     result = client.post('/v1/customer/trial', json={})
     assert result.status_code == 200
     end = datetime.fromisoformat(result.json()['expires_at'])
-    assert before + timedelta(days=14) <= end <= datetime.now(timezone.utc) + timedelta(days=14)
+    assert before + timedelta(days=14) <= end <= datetime.now(UTC) + timedelta(days=14)
     assert client.post('/v1/customer/trial', json={}).json()['expires_at'] == result.json()['expires_at']
     info = client.get('/v1/customer/me').json()
     assert info['trial_available'] is False
@@ -335,6 +343,7 @@ def test_trial_is_verified_one_time_and_downloads_without_payment(kit, monkeypat
 
 def test_trial_expiry_caps_signed_lease_and_cannot_be_restarted(kit):
     from datetime import timedelta
+
     from license_server.customer_models import CustomerTrial
     from license_server.models import utcnow
     client, engine, _, _ = kit
@@ -363,8 +372,9 @@ def test_trial_expiry_caps_signed_lease_and_cannot_be_restarted(kit):
 @pytest.mark.parametrize('expired', [False, True])
 def test_trial_upgrade_preserves_bound_appliance_and_removes_expiry(kit, expired):
     from datetime import timedelta
-    from license_server.models import utcnow
+
     from license_server.customer_models import CustomerTrial
+    from license_server.models import utcnow
     client, engine, _, _ = kit
     account(kit)
     assert client.post('/v1/customer/trial', json={}).status_code == 200
@@ -458,7 +468,7 @@ def canceled_purchase(kit, monkeypatch):
 
 
 def test_canceled_customer_resubscribes_preserving_appliance_and_late_events(kit, monkeypatch):
-    original, sessions, subscriptions, captured = canceled_purchase(kit, monkeypatch)
+    original, sessions, _subscriptions, captured = canceled_purchase(kit, monkeypatch)
     client, engine, _, _ = kit
     assert client.get('/v1/customer/me').json()['license']['can_resubscribe'] is True
     assert client.post('/v1/customer/checkout', json={'seats': 3}).status_code == 200
@@ -566,7 +576,7 @@ def test_concurrent_old_subscription_event_cannot_expire_replacement(kit, monkey
 
     if kit[1].dialect.name != 'postgresql':
         pytest.skip('Requires real PostgreSQL transaction locking')
-    original, sessions, subscriptions, _ = canceled_purchase(kit, monkeypatch)
+    original, sessions, _subscriptions, _ = canceled_purchase(kit, monkeypatch)
     assert kit[0].post('/v1/customer/checkout', json={'seats': 3}).status_code == 200
     sessions['cs_return'].update(status='complete', payment_status='paid')
     replacement_holds_lock, old_event_waiting = Event(), Event()

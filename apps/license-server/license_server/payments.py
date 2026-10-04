@@ -115,10 +115,9 @@ def fulfill_checkout(db: Session, session_id: str) -> Purchase | None:
     if identifier(subscription.get("customer")) != identifier(session.get("customer")):
         raise HTTPException(409, "Checkout customer mismatch")
     seats = subscription_seats(subscription, purchase.price_id)
-    if seats != purchase.seats:
-        # After fulfillment, changes are managed by subscription reconciliation.
-        if purchase.status != "fulfilled":
-            raise HTTPException(409, "Checkout seat quantity mismatch")
+    # After fulfillment, changes are managed by subscription reconciliation.
+    if seats != purchase.seats and purchase.status != "fulfilled":
+        raise HTTPException(409, "Checkout seat quantity mismatch")
     customer = db.get(Customer, purchase.customer_id)
     db.execute(update(Customer).where(Customer.id == customer.id).values(company_name=customer.company_name))
     binding = db.scalar(select(CustomerLicense).where(
