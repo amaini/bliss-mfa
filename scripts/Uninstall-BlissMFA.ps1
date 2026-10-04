@@ -46,7 +46,7 @@ try {
         }
     }
     $menu=Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Bliss MFA'
-    foreach ($file in @((Join-Path $menu 'Bliss MFA Portal.url'),(Join-Path $menu 'Uninstall Bliss MFA.lnk'),(Join-Path ([Environment]::GetFolderPath('CommonDesktopDirectory')) 'Bliss MFA Portal.url'))) { if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file } }
+    foreach ($file in @((Join-Path $menu 'Bliss MFA Portal.url'),(Join-Path $menu 'Uninstall Bliss MFA.lnk'),(Join-Path $menu 'Check for Bliss MFA updates.lnk'),(Join-Path ([Environment]::GetFolderPath('CommonDesktopDirectory')) 'Bliss MFA Portal.url'))) { if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file } }
     Remove-Item 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\BlissMFA' -Recurse -ErrorAction SilentlyContinue
     Write-Host ('Bliss MFA uninstalled. Private data and backups remain in '+$rootPath+'. Your subscription is unchanged. Restart Windows before testing sign-in.')
     Read-Host 'Press Enter to close'

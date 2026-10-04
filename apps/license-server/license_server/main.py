@@ -35,11 +35,13 @@ from .schemas import (
 )
 from .security import require_admin
 from .customer_routes import router as customer_router
+from .updates import mount_update_feed
 
 
 settings = get_settings()
 app = FastAPI(title="Bliss Secure MFA License Server", version="0.1.0")
 app.include_router(customer_router)
+mount_update_feed(app, settings.appliance_update_directory)
 
 
 @app.on_event("startup")
