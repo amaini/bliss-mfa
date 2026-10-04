@@ -133,3 +133,39 @@ def test_lock_rejects_ineligible_user_states(isolated_api, status):
     db.add(user)
     db.commit()
     assert client.post(f"/v1/users/{user.id}/lock", json={"reason": "Test lock"}).status_code == 409
+
+
+@pytest.mark.parametrize("operation", ["enable", "disable"])
+def test_pending_enrollment_cannot_be_bypassed_by_status_commands(
+    isolated_api, monkeypatch, operation,
+):
+    client, db, seats = isolated_api
+    user = MfaUser(username="disposable", engine_username="disposable", status=UserStatus.pending)
+    db.add(user)
+    db.commit()
+
+    def unexpected_engine_call():
+        raise AssertionError("Pending user must not reach the engine")
+
+    monkeypatch.setattr(main, "multiotp", unexpected_engine_call)
+    assert client.post(f"/v1/users/{user.id}/{operation}",
+                       json={"reason": "Test enrollment bypass"}).status_code == 409
+    db.refresh(user)
+    assert user.status == UserStatus.pending
+    assert seats.released == []
+
+
+def test_enable_does_not_claim_to_unlock_locked_user(isolated_api, monkeypatch):
+    client, db, _ = isolated_api
+    user = MfaUser(username="disposable", engine_username="disposable", status=UserStatus.locked)
+    db.add(user)
+    db.commit()
+
+    def unexpected_engine_call():
+        raise AssertionError("Enable must not reach the engine for a locked user")
+
+    monkeypatch.setattr(main, "multiotp", unexpected_engine_call)
+    assert client.post(f"/v1/users/{user.id}/enable",
+                       json={"reason": "Test incorrect transition"}).status_code == 409
+    db.refresh(user)
+    assert user.status == UserStatus.locked

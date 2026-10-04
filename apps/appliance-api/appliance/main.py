@@ -15,8 +15,17 @@ from sqlalchemy.orm import Session
 from .audit import write_audit
 from .clients import AdapterOperationError, LicenseAgentClient, MultiOtpClient
 from .config import get_settings
-from .db import Base, SessionLocal, engine, get_db
-from .models import AdminRole, AuditEvent, BootstrapSeal, LocalAdmin, MfaUser, UserStatus, event_digest
+from .db import SessionLocal, get_db
+from .migrate import migrate
+from .models import (
+    AdminRole,
+    AuditEvent,
+    BootstrapSeal,
+    LocalAdmin,
+    MfaUser,
+    UserStatus,
+    event_digest,
+)
 from .schemas import (
     AdminCreate,
     AdminRead,
@@ -98,7 +107,7 @@ def confirm_rdp_onboarding(
 
 @app.on_event("startup")
 def startup() -> None:
-    Base.metadata.create_all(bind=engine)
+    migrate()
 
 
 def multiotp() -> MultiOtpClient:
@@ -500,6 +509,10 @@ def reason_command(
     user = user_or_404(db, user_id)
     if command != "revoke" and user.status == UserStatus.revoked:
         raise HTTPException(status_code=409, detail="Revoked users must be deleted and enrolled again")
+    if command in {"enable", "disable"} and user.status == UserStatus.pending:
+        raise HTTPException(status_code=409, detail="Verify enrollment before enabling or disabling a user")
+    if command == "enable" and user.status == UserStatus.locked:
+        raise HTTPException(status_code=409, detail="Use unlock for an enrolled, locked user")
     if command == "unlock" and user.status in {UserStatus.disabled, UserStatus.pending}:
         raise HTTPException(status_code=409, detail="Only enrolled, enabled users may be unlocked")
     if command == "lock" and user.status not in {UserStatus.active, UserStatus.locked}:
