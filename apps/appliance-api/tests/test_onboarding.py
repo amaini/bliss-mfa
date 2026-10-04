@@ -56,3 +56,31 @@ def test_operator_cannot_confirm_owner_acceptance(kit):
     main.app.dependency_overrides[current_principal] = lambda: Principal(
         id='operator-test', email='operator@example.com', role=AdminRole.operator)
     assert client.post('/v1/onboarding/rdp/example').status_code == 403
+
+
+def test_windows_account_discovery_is_read_only_and_marks_enrolled_accounts(kit, monkeypatch):
+    import json
+    import subprocess
+
+    client, db, _ = kit
+    db.add(MfaUser(username='jsmith', engine_username='jsmith', status=UserStatus.pending))
+    db.commit()
+    monkeypatch.setattr(main.os, 'name', 'nt')
+    monkeypatch.setattr(main.subprocess, 'run', lambda *args, **kwargs: subprocess.CompletedProcess(
+        args[0], 0, json.dumps([
+            {'username': 'jsmith', 'display_name': 'John Smith', 'enabled': True},
+            {'username': 'disabled', 'display_name': None, 'enabled': False},
+        ]), ''))
+    result = client.get('/v1/windows-users')
+    assert result.status_code == 200
+    assert result.json() == [
+        {'username': 'jsmith', 'display_name': 'John Smith', 'enabled': True, 'enrolled': True},
+        {'username': 'disabled', 'display_name': None, 'enabled': False, 'enrolled': False},
+    ]
+    assert len(list(db.query(MfaUser))) == 1
+
+
+def test_windows_account_discovery_refuses_non_windows_host(kit, monkeypatch):
+    client, _, _ = kit
+    monkeypatch.setattr(main.os, 'name', 'posix')
+    assert client.get('/v1/windows-users').status_code == 503

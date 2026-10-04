@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import hmac
+import json
+import os
+import subprocess
 
 import httpx
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -331,6 +334,49 @@ def list_users(
     db: Session = Depends(get_db),
 ) -> list[MfaUser]:
     return list(db.scalars(select(MfaUser).order_by(MfaUser.username)))
+
+
+@app.get("/v1/windows-users")
+def list_windows_users(
+    _: Principal = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> list[dict[str, str | bool | None]]:
+    """Read-only inventory of local Windows accounts; never create or change accounts."""
+    if os.name != "nt":
+        raise HTTPException(status_code=503, detail="Windows account discovery is available only on the appliance")
+    script = """$ErrorActionPreference='Stop'
+    Get-LocalUser | Sort-Object Name | ForEach-Object {
+      [ordered]@{ username=$_.Name; display_name=$_.FullName; enabled=$_.Enabled }
+    } | ConvertTo-Json -Compress -Depth 3"""
+    try:
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+            capture_output=True, text=True, timeout=10, check=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(status_code=502, detail="Unable to read local Windows accounts") from exc
+    if result.returncode != 0:
+        raise HTTPException(status_code=502, detail="Unable to read local Windows accounts")
+    try:
+        rows = json.loads(result.stdout or "[]")
+        if isinstance(rows, dict):
+            rows = [rows]
+        if not isinstance(rows, list):
+            raise ValueError("unexpected account list")
+        enrolled = {username.casefold() for username in db.scalars(select(MfaUser.username))}
+        return [
+            {
+                "username": row["username"],
+                "display_name": row.get("display_name") if isinstance(row.get("display_name"), str) else None,
+                "enabled": bool(row.get("enabled")),
+                "enrolled": row["username"].casefold() in enrolled,
+            }
+            for row in rows
+            if isinstance(row, dict) and isinstance(row.get("username"), str)
+        ]
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail="Windows account list could not be parsed") from exc
 
 
 @app.post("/v1/users", response_model=UserRead, status_code=201)

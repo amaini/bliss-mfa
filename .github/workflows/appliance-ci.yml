@@ -82,6 +82,8 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff check license_server tests
       - run: pytest -q
+      - run: ruff check ../../scripts/client-update.py ../../scripts/publish-client-update.py ../../scripts/tests/test_client_update.py
+      - run: pytest -q ../../scripts/tests/test_client_update.py
 
   license-agent:
     runs-on: ubuntu-latest

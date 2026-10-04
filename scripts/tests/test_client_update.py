@@ -16,8 +16,8 @@ spec.loader.exec_module(updater)
 
 def signed(**changes):
     key = Ed25519PrivateKey.generate()
-    release = dict(format=1, product='bliss-mfa-windows', version='0.1.2', minimum_version='0.1.1',
-                   url='https://license.example/updates/application.zip', sha256='a' * 64, size=1024)
+    release = {'format': 1, 'product': 'bliss-mfa-windows', 'version': '0.1.2', 'minimum_version': '0.1.1',
+               'url': 'https://license.example/updates/application.zip', 'sha256': 'a' * 64, 'size': 1024}
     release.update(changes)
     payload = json.dumps(release).encode()
     return ({'payload': base64.b64encode(payload).decode(), 'signature': base64.b64encode(key.sign(payload)).decode()},
@@ -39,9 +39,9 @@ def test_wrong_signing_key():
         updater.verify_manifest(envelope, other_key, '0.1.1')
 
 
-@pytest.mark.parametrize('changes', [dict(version='0.1.1'), dict(version='0.1.0'),
-                                   dict(minimum_version='0.2.0'), dict(url='http://example/x'),
-                                   dict(product='other'), dict(size=updater.MAX_SIZE + 1)])
+@pytest.mark.parametrize('changes', [{'version': '0.1.1'}, {'version': '0.1.0'},
+                                   {'minimum_version': '0.2.0'}, {'url': 'http://example/x'},
+                                   {'product': 'other'}, {'size': updater.MAX_SIZE + 1}])
 def test_signed_but_incompatible(changes):
     envelope, key = signed(**changes)
     with pytest.raises(ValueError):

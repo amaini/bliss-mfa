@@ -41,7 +41,7 @@ def verify_manifest(envelope, key_bytes, current):
     payload = base64.b64decode(envelope['payload'], validate=True)
     key = serialization.load_pem_public_key(key_bytes)
     if not isinstance(key, Ed25519PublicKey):
-        raise ValueError('Update signing key must be Ed25519')
+        raise TypeError('Update signing key must be Ed25519')
     key.verify(base64.b64decode(envelope['signature'], validate=True), payload)
     release = json.loads(payload)
     if release['format'] != 1 or release['product'] != 'bliss-mfa-windows':
@@ -67,7 +67,7 @@ def safe_name(name):
             or path.parts[0] not in ('bliss-mfa', 'portal')
             or any((p.startswith('.') and not (p == '.next' and path.parts[0] == 'portal'))
                    or p.rstrip(' .') != p for p in path.parts)
-            or any(re.fullmatch(r'(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?', p, re.I) for p in path.parts)):
+            or any(re.fullmatch(r'(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?', p, re.IGNORECASE) for p in path.parts)):
         raise ValueError('Unsafe or private update path')
     return path
 
@@ -263,6 +263,6 @@ def set_display_version(value):
 if __name__ == '__main__':
     try:
         main()
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001 - CLI boundary reports operational failures without a traceback.
         print('Update could not complete: ' + (str(error) or type(error).__name__))
         raise SystemExit(1) from None

@@ -268,6 +268,10 @@ h2 { font-size: 20px; font-weight: 650; margin-top: 0; }
 .recentEvents li > span:first-of-type { color: var(--muted); }
 .sectionHeading { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .sectionHeading h2 { margin: 0; }
+.windowsAccountsHeading { justify-content: space-between; align-items: flex-start; }
+.windowsAccountsHeading p { margin: 4px 0 0; }
+.windowsAccountsList { padding: 0; overflow: hidden; }
+.windowsAccountRow { grid-template-columns: minmax(0, 1fr) auto; }
 .count { color: var(--muted); font-size: 13px; }
 .usersTable { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .usersTable th, .usersTable td { padding: 13px 14px; text-align: left; vertical-align: middle; border-bottom: 1px solid var(--line); }

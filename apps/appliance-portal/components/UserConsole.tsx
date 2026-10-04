@@ -16,6 +16,13 @@ type User = {
   created_at: string;
 };
 
+type WindowsAccount = {
+  username: string;
+  display_name: string | null;
+  enabled: boolean;
+  enrolled: boolean;
+};
+
 type UserAction = "disable" | "enable" | "unlock" | "revoke" | "delete";
 const actionLabels: Record<UserAction, string> = {
   disable: "Disable OTP for", enable: "Re-enable OTP for", unlock: "Unlock", revoke: "Revoke OTP for", delete: "Delete",
@@ -33,6 +40,9 @@ export default function UserConsole({ title = "RDP Users" }: { title?: string })
   const [action, setAction] = useState<{ user: User; kind: UserAction } | null>(null);
   const [events, setEvents] = useState<{ id: string; action: string; created_at: string; success: boolean }[]>([]);
   const [auditError, setAuditError] = useState<string | null>(null);
+  const [windowsAccounts, setWindowsAccounts] = useState<WindowsAccount[] | null>(null);
+  const [windowsAccountError, setWindowsAccountError] = useState<string | null>(null);
+  const [scanningWindowsAccounts, setScanningWindowsAccounts] = useState(false);
   const managedUsers = users.filter((user) => !["disabled", "revoked"].includes(user.status));
   const inactiveUsers = users.filter((user) => ["disabled", "revoked"].includes(user.status));
 
@@ -57,6 +67,50 @@ export default function UserConsole({ title = "RDP Users" }: { title?: string })
   }
 
   useEffect(() => { load(); }, []);
+
+  async function discoverWindowsAccounts() {
+    setWindowsAccountError(null);
+    setScanningWindowsAccounts(true);
+    try {
+      setWindowsAccounts(await api<WindowsAccount[]>("/windows-users"));
+    } catch (err) {
+      setWindowsAccountError(err instanceof Error ? err.message : "Unable to discover Windows accounts");
+    } finally {
+      setScanningWindowsAccounts(false);
+    }
+  }
+
+  async function addWindowsAccount(account: WindowsAccount) {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const user = await api<User>("/users", {
+        method: "POST",
+        body: JSON.stringify({ username: account.username, display_name: account.display_name, email: null }),
+      });
+      setWindowsAccounts((current) => current
+        ? current.map((entry) =>
+            entry.username.toLowerCase() === account.username.toLowerCase()
+              ? { ...entry, enrolled: true }
+              : entry)
+        : current);
+      await load();
+      const enrollment = await api<{ provisioning_uri: string }>(`/users/${user.id}/enrollment`, {
+        method: "POST",
+        body: "{}",
+      });
+      setProvisioning({ userId: user.id, username: user.username, uri: enrollment.provisioning_uri });
+      setQr(await QRCode.toDataURL(enrollment.provisioning_uri, { width: 260, margin: 1 }));
+      setMessage(`MFA record created for ${user.username}. Scan the QR code to finish enrollment.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to start enrollment");
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   useEffect(() => {
     if (title === "Dashboard") {
       api<typeof events>("/audit?limit=8").then(setEvents)
@@ -207,6 +261,28 @@ export default function UserConsole({ title = "RDP Users" }: { title?: string })
 
       {error ? <div className="notice" role="alert">{error}</div> : null}
       {message ? <div className="notice goodNotice" role="status">{message}</div> : null}
+
+      <section className="userSection" aria-labelledby="windows-accounts-title">
+        <div className="sectionHeading windowsAccountsHeading">
+          <div><h2 id="windows-accounts-title">Windows accounts</h2><p className="muted">Read-only discovery of local accounts on this computer. Domain accounts are not included.</p></div>
+          <button className="secondary" disabled={scanningWindowsAccounts || busy} onClick={discoverWindowsAccounts}>
+            {scanningWindowsAccounts ? "Scanning…" : "Detect accounts"}
+          </button>
+        </div>
+        {windowsAccountError ? <div className="notice" role="alert">{windowsAccountError}</div> : null}
+        {windowsAccounts?.length ? <div className="card windowsAccountsList">
+          {windowsAccounts.map((account) => (
+            <div className="row windowsAccountRow" key={account.username}>
+              <div className="nameBlock"><strong>{account.display_name || account.username}</strong><small>{account.username}{account.enabled ? " · enabled" : " · disabled"}</small></div>
+              <button className="primary" disabled={!account.enabled || account.enrolled || busy}
+                onClick={() => addWindowsAccount(account)}>
+                {account.enrolled ? "Already added" : !account.enabled ? "Account disabled" : busy ? "Starting…" : "Enroll in MFA"}
+              </button>
+            </div>
+          ))}
+        </div> : null}
+        {windowsAccounts?.length === 0 ? <p className="muted">No local Windows accounts were found.</p> : null}
+      </section>
 
       {action ? (
         <form key={`${action.user.id}:${action.kind}`} className="card stack actionPanel" onSubmit={submitAction} aria-labelledby="action-title">

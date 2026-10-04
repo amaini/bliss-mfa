@@ -29,7 +29,7 @@ def main():
     updater.https(args.url)
     key = serialization.load_pem_private_key(args.key.read_bytes(), password=None)
     if not isinstance(key, Ed25519PrivateKey):
-        raise ValueError('Update signing key must be Ed25519')
+        raise TypeError('Update signing key must be Ed25519')
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(args.appliance) as appliance, zipfile.ZipFile(args.output, 'x', zipfile.ZIP_DEFLATED) as update:
         for name in appliance.namelist():
