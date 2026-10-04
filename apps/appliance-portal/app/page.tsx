@@ -53,13 +53,13 @@ export default function Dashboard() {
         <article className="card stack">
           <div>
             <p className="eyebrow">Operations</p>
-            <h2>Office-managed MFA</h2>
-            <p className="muted">User onboarding, revocation and day-to-day MFA operations stay inside this appliance.</p>
+            <h2>Manage your MFA accounts</h2>
+            <p className="muted">Enroll an authenticator, manage OTP access, and review activity from this local console.</p>
           </div>
           <div className="actions">
-            <a href="/users">Manage RDP users</a>
-            <a href="/administrators">Manage administrators</a>
-            <a href="/audit">Review audit history</a>
+            <a className="button primary" href="/users">Manage RDP users</a>
+            <a className="button" href="/administrators">Administrators</a>
+            <a className="button" href="/audit">Audit history</a>
           </div>
         </article>
 
