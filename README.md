@@ -73,3 +73,7 @@ The repository now contains the appliance/control-plane implementation
 foundation. Production deployment still requires real multiOTP compatibility
 testing, signing-key provisioning, TLS, database migrations, CI execution and
 Stripe production configuration.
+
+## Isolated Windows RADIUS testing
+
+See [the disposable RADIUS harness](tools/windows-radius/README.md) for real loopback lifecycle checks using an extracted test kit, including support for paths containing spaces. These checks do not validate Windows login or RDP credential-provider integration.
