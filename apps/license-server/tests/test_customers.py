@@ -3,22 +3,29 @@ import hmac
 import json
 import re
 import time
+from datetime import UTC
 
 import pytest
 import stripe
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from license_server import customer_routes, main
 from license_server.config import get_settings
-from license_server.customer_models import Customer, CustomerLicense, CustomerToken, PaymentEvent, Purchase
-from license_server.db import Base, get_db
-from license_server.models import License
 from license_server.crypto import canonical_json
+from license_server.customer_models import (
+    Customer,
+    CustomerLicense,
+    CustomerToken,
+    PaymentEvent,
+    Purchase,
+)
+from license_server.db import Base, get_db
 from license_server.main import b64url_decode
+from license_server.models import License
 
 PASSWORD = "correct-horse-prototype-42"
 
@@ -72,7 +79,7 @@ def kit(tmp_path, monkeypatch, database_engine):
 def register(kit, email="owner@example.com"):
     client, _, root, _ = kit
     assert client.post("/v1/customer/register", json={"email": email, "password": PASSWORD, "company_name": "Test Office"}).status_code == 202
-    message = sorted((root / "mail").glob("*.eml"), key=lambda p: p.stat().st_mtime_ns)[-1].read_text()
+    message = max((root / "mail").glob("*.eml"), key=lambda p: p.stat().st_mtime_ns).read_text()
     # EmailMessage wraps long lines using quoted-printable.
     from email import policy
     from email.parser import Parser
@@ -304,7 +311,8 @@ def test_signing_failure_preserves_activation_code(kit, monkeypatch):
 
 
 def test_trial_is_verified_one_time_and_downloads_without_payment(kit, monkeypatch):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
+
     from license_server.customer_models import CustomerTrial
     client, engine, root, _ = kit
     assert client.post('/v1/customer/trial', json={}).status_code == 401
@@ -312,11 +320,11 @@ def test_trial_is_verified_one_time_and_downloads_without_payment(kit, monkeypat
     assert client.post('/v1/customer/login', json={'email':'owner@example.com','password':PASSWORD}).status_code == 403
     # Use another verified account because registration above intentionally remains unverified.
     account(kit, 'trial@example.com')
-    before = datetime.now(timezone.utc)
+    before = datetime.now(UTC)
     result = client.post('/v1/customer/trial', json={})
     assert result.status_code == 200
     end = datetime.fromisoformat(result.json()['expires_at'])
-    assert before + timedelta(days=14) <= end <= datetime.now(timezone.utc) + timedelta(days=14)
+    assert before + timedelta(days=14) <= end <= datetime.now(UTC) + timedelta(days=14)
     assert client.post('/v1/customer/trial', json={}).json()['expires_at'] == result.json()['expires_at']
     info = client.get('/v1/customer/me').json()
     assert info['trial_available'] is False
@@ -335,6 +343,7 @@ def test_trial_is_verified_one_time_and_downloads_without_payment(kit, monkeypat
 
 def test_trial_expiry_caps_signed_lease_and_cannot_be_restarted(kit):
     from datetime import timedelta
+
     from license_server.customer_models import CustomerTrial
     from license_server.models import utcnow
     client, engine, _, _ = kit
@@ -363,8 +372,9 @@ def test_trial_expiry_caps_signed_lease_and_cannot_be_restarted(kit):
 @pytest.mark.parametrize('expired', [False, True])
 def test_trial_upgrade_preserves_bound_appliance_and_removes_expiry(kit, expired):
     from datetime import timedelta
-    from license_server.models import utcnow
+
     from license_server.customer_models import CustomerTrial
+    from license_server.models import utcnow
     client, engine, _, _ = kit
     account(kit)
     assert client.post('/v1/customer/trial', json={}).status_code == 200
@@ -417,3 +427,242 @@ def test_cached_trial_is_restricted_at_deadline_without_contacting_server(kit, m
         assert not state.reserve_seat('third-user')['allowed']
     finally:
         agent_settings.cache_clear()
+
+
+def canceled_purchase(kit, monkeypatch):
+    """Retain both generations of Stripe objects to test late event delivery."""
+    from copy import deepcopy
+
+    purchase(kit)
+    paid(kit)
+    client, engine, _, state = kit
+    original = client.get('/v1/customer/me').json()['license']['id']
+    with Session(engine) as db:
+        license = db.get(License, original)
+        license.installation_id = 'MFA-returning-customer'
+        license.installation_public_key = 'preserved-device-key'
+        db.commit()
+    old_subscription = state['subscription']
+    old_subscription['status'] = 'canceled'
+    assert webhook(kit, 'evt_cancel', 'customer.subscription.deleted', 'sub_test').status_code == 200
+    sessions = {'cs_test': deepcopy(state['session'])}
+    subscriptions = {'sub_test': old_subscription}
+    captured = {}
+
+    def create_checkout(**kwargs):
+        captured.update(kwargs)
+        sessions['cs_return'] = {'id': 'cs_return', 'client_reference_id': kwargs['client_reference_id'],
+                                'mode': 'subscription', 'status': 'open', 'payment_status': 'unpaid',
+                                'customer': kwargs['customer'], 'subscription': 'sub_return',
+                                'url': 'https://checkout.stripe.com/return'}
+        subscriptions['sub_return'] = {'id': 'sub_return', 'customer': kwargs['customer'],
+                                      'status': 'active', 'latest_invoice': {'status': 'paid'},
+                                      'items': {'data': [{'price': {'id': 'price_seat'},
+                                                         'quantity': kwargs['line_items'][0]['quantity']}]}}
+        return sessions['cs_return']
+
+    monkeypatch.setattr(stripe.checkout.Session, 'create', create_checkout)
+    monkeypatch.setattr(stripe.checkout.Session, 'retrieve', lambda sid, **_: sessions[sid])
+    monkeypatch.setattr(stripe.Subscription, 'retrieve', lambda sid, **_: subscriptions[sid])
+    return original, sessions, subscriptions, captured
+
+
+def test_canceled_customer_resubscribes_preserving_appliance_and_late_events(kit, monkeypatch):
+    original, sessions, _subscriptions, captured = canceled_purchase(kit, monkeypatch)
+    client, engine, _, _ = kit
+    assert client.get('/v1/customer/me').json()['license']['can_resubscribe'] is True
+    assert client.post('/v1/customer/checkout', json={'seats': 3}).status_code == 200
+    assert captured['customer'] == 'cus_stripe' and 'customer_email' not in captured
+    assert client.get('/v1/customer/me').json()['license']['status'] == 'expired'
+    assert client.post('/v1/customer/checkout', json={'seats': 9}).json()['url'] == 'https://checkout.stripe.com/return'
+    sessions['cs_return'].update(status='complete', payment_status='paid')
+    assert webhook(kit, 'evt_return_paid', object_id='cs_return').status_code == 200
+    assert webhook(kit, 'evt_return_paid', object_id='cs_return').status_code == 200
+    # Late old checkout and cancellation deliveries must not expire or rebind it.
+    assert webhook(kit, 'evt_old_checkout_late', object_id='cs_test').status_code == 200
+    assert webhook(kit, 'evt_old_subscription_late', 'customer.subscription.deleted', 'sub_test').status_code == 200
+    license = client.get('/v1/customer/me').json()['license']
+    assert license['id'] == original and license['installation_id'] == 'MFA-returning-customer'
+    assert license['status'] == 'active' and license['max_rdp_users'] == 3
+    assert license['can_resubscribe'] is False
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(License)) == 1
+        assert db.scalar(select(CustomerLicense)).subscription_id == 'sub_return'
+        assert db.get(License, original).installation_public_key == 'preserved-device-key'
+    assert client.post('/v1/customer/checkout', json={'seats': 3}).status_code == 409
+
+
+@pytest.mark.parametrize('state', ['active', 'past_due', 'unpaid', 'paused', 'trialing'])
+def test_existing_nonterminal_subscription_cannot_create_duplicate_charge(kit, state):
+    purchase(kit)
+    paid(kit)
+    kit[3]['subscription']['status'] = state
+    assert kit[0].post('/v1/customer/checkout', json={'seats': 2}).status_code == 409
+    with Session(kit[1]) as db:
+        assert db.scalar(select(func.count()).select_from(Purchase)) == 1
+
+
+@pytest.mark.parametrize('damage', ['foreign-customer', 'revoked'])
+def test_replacement_payment_cannot_rebind_foreign_or_revoked_license(kit, monkeypatch, damage):
+    from license_server.models import LicenseStatus
+
+    original, sessions, subscriptions, _ = canceled_purchase(kit, monkeypatch)
+    assert kit[0].post('/v1/customer/checkout', json={'seats': 3}).status_code == 200
+    sessions['cs_return'].update(status='complete', payment_status='paid')
+    if damage == 'foreign-customer':
+        sessions['cs_return']['customer'] = 'cus_other'
+        subscriptions['sub_return']['customer'] = 'cus_other'
+    else:
+        with Session(kit[1]) as db:
+            db.get(License, original).status = LicenseStatus.revoked
+            db.commit()
+    assert webhook(kit, 'evt_bad_return', object_id='cs_return').status_code == 409
+    with Session(kit[1]) as db:
+        assert db.get(PaymentEvent, 'evt_bad_return') is None
+        assert db.scalar(select(CustomerLicense)).subscription_id == 'sub_test'
+        assert db.get(License, original).installation_public_key == 'preserved-device-key'
+
+
+def test_billing_webhook_does_not_restore_administratively_revoked_license(kit):
+    from license_server.models import LicenseStatus
+
+    purchase(kit)
+    paid(kit)
+    with Session(kit[1]) as db:
+        db.scalar(select(License)).status = LicenseStatus.revoked
+        db.commit()
+    assert webhook(kit, 'evt_invoice_after_revoke', 'customer.subscription.updated', 'sub_test').status_code == 200
+    assert kit[0].get('/v1/customer/me').json()['license']['status'] == 'revoked'
+    kit[3]['subscription']['status'] = 'canceled'
+    assert webhook(kit, 'evt_cancel_after_revoke', 'customer.subscription.deleted', 'sub_test').status_code == 200
+    assert kit[0].get('/v1/customer/me').json()['license']['status'] == 'revoked'
+    assert kit[0].post('/v1/customer/checkout', json={'seats': 2}).status_code == 409
+
+
+def test_customer_refresh_recovers_missed_cancellation_without_new_purchase(kit):
+    purchase(kit)
+    paid(kit)
+    client, engine, _, state = kit
+    state['subscription']['status'] = 'canceled'
+    assert client.get('/v1/customer/me').json()['license']['can_resubscribe'] is False
+    assert client.post('/v1/customer/subscription/refresh', json={}).json()['status'] == 'expired'
+    assert client.get('/v1/customer/me').json()['license']['can_resubscribe'] is True
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(Purchase)) == 1
+    client.post('/v1/customer/logout')
+    assert client.post('/v1/customer/subscription/refresh', json={}).status_code == 401
+    account(kit, 'different@example.com')
+    assert client.post('/v1/customer/subscription/refresh', json={}).status_code == 404
+
+
+def test_customer_refresh_preserves_admin_revocation(kit):
+    from license_server.models import LicenseStatus
+
+    purchase(kit)
+    paid(kit)
+    with Session(kit[1]) as db:
+        db.scalar(select(License)).status = LicenseStatus.revoked
+        db.commit()
+    assert kit[0].post('/v1/customer/subscription/refresh', json={}).json()['status'] == 'revoked'
+
+
+def test_concurrent_old_subscription_event_cannot_expire_replacement(kit, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event, current_thread
+
+    from sqlalchemy import event
+
+    from license_server.payments import fulfill_checkout, reconcile_subscription
+
+    if kit[1].dialect.name != 'postgresql':
+        pytest.skip('Requires real PostgreSQL transaction locking')
+    original, sessions, _subscriptions, _ = canceled_purchase(kit, monkeypatch)
+    assert kit[0].post('/v1/customer/checkout', json={'seats': 3}).status_code == 200
+    sessions['cs_return'].update(status='complete', payment_status='paid')
+    replacement_holds_lock, old_event_waiting = Event(), Event()
+    resume = Event()
+    retrieve = stripe.Subscription.retrieve
+
+    def controlled_retrieve(sid, **kwargs):
+        if sid == 'sub_test' and current_thread().name.startswith('replacement'):
+            replacement_holds_lock.set()
+            assert resume.wait(10)
+        return retrieve(sid, **kwargs)
+
+    def observe_update(connection, cursor, statement, parameters, context, executemany):
+        if statement.startswith('UPDATE customers') and current_thread().name.startswith('old-event'):
+            old_event_waiting.set()
+
+    monkeypatch.setattr(stripe.Subscription, 'retrieve', controlled_retrieve)
+    event.listen(kit[1], 'before_cursor_execute', observe_update)
+
+    def replacement():
+        with Session(kit[1]) as db:
+            fulfill_checkout(db, 'cs_return')
+            db.commit()
+
+    def stale_event():
+        with Session(kit[1]) as db:
+            reconcile_subscription(db, 'sub_test')
+            db.commit()
+
+    try:
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix='replacement') as new_pool, \
+                ThreadPoolExecutor(max_workers=1, thread_name_prefix='old-event') as old_pool:
+            new = new_pool.submit(replacement)
+            assert replacement_holds_lock.wait(10)
+            old = old_pool.submit(stale_event)
+            try:
+                assert old_event_waiting.wait(10)
+            finally:
+                resume.set()
+            new.result(timeout=10)
+            old.result(timeout=10)
+    finally:
+        resume.set()
+        event.remove(kit[1], 'before_cursor_execute', observe_update)
+    with Session(kit[1]) as db:
+        license = db.get(License, original)
+        assert license.status.value == 'active' and license.stripe_subscription_id == 'sub_return'
+        assert db.scalar(select(CustomerLicense)).subscription_id == 'sub_return'
+
+
+def test_webhook_provider_wait_does_not_block_public_health(kit, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    purchase(kit)
+    paid(kit)
+    reached, resume = Event(), Event()
+    retrieve = stripe.Subscription.retrieve
+
+    def delayed_subscription(sid, **kwargs):
+        reached.set()
+        assert resume.wait(10)
+        return retrieve(sid, **kwargs)
+
+    monkeypatch.setattr(stripe.Subscription, 'retrieve', delayed_subscription)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        delivery = pool.submit(webhook, kit, 'evt_provider_delay', 'customer.subscription.updated', 'sub_test')
+        try:
+            assert reached.wait(5)
+            assert pool.submit(kit[0].get, '/health').result(timeout=5).status_code == 200
+            assert not delivery.done()
+        finally:
+            resume.set()
+        assert delivery.result(timeout=5).status_code == 200
+
+
+def test_revoked_trial_cannot_start_a_paid_purchase(kit):
+    from license_server.customer_models import CustomerTrial
+    from license_server.models import LicenseStatus
+
+    account(kit)
+    kit[0].post('/v1/customer/trial', json={})
+    with Session(kit[1]) as db:
+        trial = db.scalar(select(CustomerTrial))
+        db.get(License, trial.license_id).status = LicenseStatus.revoked
+        db.commit()
+    assert kit[0].post('/v1/customer/checkout', json={'seats': 3}).status_code == 409
+    with Session(kit[1]) as db:
+        assert db.scalar(select(func.count()).select_from(Purchase)) == 0

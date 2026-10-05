@@ -18,7 +18,6 @@ from .schemas import (
 from .security import require_local_auth
 from .state import LicenseState
 
-
 app = FastAPI(
     title="Bliss Secure MFA License Agent",
     version="0.1.0",

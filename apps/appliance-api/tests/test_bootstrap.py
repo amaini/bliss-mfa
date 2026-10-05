@@ -34,7 +34,8 @@ def test_bootstrap_is_single_use_under_concurrent_requests(tmp_path, monkeypatch
         assert sorted(statuses) == [201, 409]
         with Session(engine) as db:
             assert db.scalar(select(func.count()).select_from(LocalAdmin)) == 1
-            db.execute(delete(LocalAdmin)); db.commit()
+            db.execute(delete(LocalAdmin))
+            db.commit()
         assert initialize(3) == 409
     finally:
         main.app.dependency_overrides.clear()

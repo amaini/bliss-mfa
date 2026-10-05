@@ -43,7 +43,9 @@ def test_incorrect_password_and_corruption_leave_no_state(source, tmp_path):
     with pytest.raises(ValueError):
         module.restore(archive, target, 'different test passphrase')
     assert not target.exists()
-    data = bytearray(archive.read_bytes()); data[-10] ^= 1; archive.write_bytes(data)
+    data = bytearray(archive.read_bytes())
+    data[-10] ^= 1
+    archive.write_bytes(data)
     with pytest.raises(ValueError):
         module.restore(archive, target, PASSWORD)
     assert not target.exists()

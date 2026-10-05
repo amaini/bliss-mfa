@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     development_mail_dir: str = ".local/mail"
     appliance_release_file: str | None = None
     appliance_release_sha256: str | None = None
+    # Public signed manifests and application ZIPs only. Never mount secret files here.
+    appliance_update_directory: str | None = None
 
 
 @lru_cache

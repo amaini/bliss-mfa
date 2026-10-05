@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { hasTrustedOrigin } from "@/lib/request-origin";
 
 type Context = { params: Promise<{ path: string[] }> };
 
-function sameOrigin(request: NextRequest) {
-  const origin = request.headers.get("origin");
-  return !origin || origin === request.nextUrl.origin;
-}
-
 async function forward(request: NextRequest, context: Context) {
-  if (!sameOrigin(request) && request.method !== "GET") {
+  if (!hasTrustedOrigin(request) && request.method !== "GET") {
     return NextResponse.json({ detail: "Invalid origin" }, { status: 403 });
   }
 

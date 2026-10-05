@@ -1,4 +1,4 @@
-from datetime import timezone
+from datetime import UTC
 
 from sqlalchemy import select
 
@@ -13,7 +13,7 @@ def trial_for(db, license_id):
 
 def expiry(trial):
     value = trial.expires_at
-    return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 def entitlement_status(db, license):

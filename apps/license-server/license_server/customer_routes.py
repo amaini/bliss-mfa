@@ -14,6 +14,7 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from .config import get_settings
 from .customer_auth import (
@@ -27,11 +28,24 @@ from .customer_auth import (
     send_account_mail,
     valid_token,
 )
-from .customer_models import Customer, CustomerLicense, CustomerToken, CustomerTrial, PaymentEvent, Purchase
+from .customer_models import (
+    Customer,
+    CustomerLicense,
+    CustomerToken,
+    CustomerTrial,
+    PaymentEvent,
+    Purchase,
+)
 from .db import get_db
 from .models import ActivationEvent, License, LicenseStatus, LicenseType, utcnow
-from .trials import entitlement_status, expiry, trial_for
-from .payments import fulfill_checkout, identifier, reconcile_subscription, stripe_options
+from .payments import (
+    canceled_customer_license,
+    fulfill_checkout,
+    identifier,
+    reconcile_subscription,
+    stripe_options,
+)
+from .trials import entitlement_status, expiry
 
 router = APIRouter()
 _attempts: dict[str, list[float]] = {}
@@ -192,6 +206,7 @@ def me(customer: Customer = Depends(current_customer), db: Session = Depends(get
             "trial_available": not binding and not trial,
             "license": {"id": license.id, "status": entitlement_status(db, license).value,
                         "is_trial": bool(trial and not trial.converted_at),
+                        "can_resubscribe": bool(binding and license.status == LicenseStatus.expired),
                         "trial_expires_at": expiry(trial).isoformat() if trial and not trial.converted_at else None,
                         "max_rdp_users": license.max_rdp_users,
                         "installation_id": license.installation_id} if license else None}
@@ -280,8 +295,11 @@ def checkout(payload: CheckoutInput, customer: Customer = Depends(current_custom
              db: Session = Depends(get_db)) -> dict:
     # A row write serializes order creation on SQLite and PostgreSQL alike.
     db.execute(update(Customer).where(Customer.id == customer.id).values(company_name=customer.company_name))
-    if db.get(CustomerLicense, customer.id):
-        raise HTTPException(409, "Manage your existing subscription through billing")
+    binding = db.get(CustomerLicense, customer.id)
+    previous_license = canceled_customer_license(db, binding) if binding else None
+    trial = db.get(CustomerTrial, customer.id)
+    if trial and db.get(License, trial.license_id).status == LicenseStatus.revoked:
+        raise HTTPException(409, "This license requires support before a new subscription")
     plan(customer)
     settings = get_settings()
     purchase = db.scalar(select(Purchase).where(Purchase.customer_id == customer.id,
@@ -302,8 +320,10 @@ def checkout(payload: CheckoutInput, customer: Customer = Depends(current_custom
                             price_id=settings.stripe_rdp_price_id)
         db.add(purchase)
         db.commit()
+    checkout_customer = ({"customer": previous_license.stripe_customer_id} if previous_license
+                         else {"customer_email": customer.email})
     session = stripe.checkout.Session.create(
-        mode="subscription", customer_email=customer.email, client_reference_id=purchase.id,
+        mode="subscription", **checkout_customer, client_reference_id=purchase.id,
         line_items=[{"price": purchase.price_id, "quantity": purchase.seats}],
         success_url=settings.customer_portal_url.rstrip("/") + "/customer?checkout={CHECKOUT_SESSION_ID}",
         cancel_url=settings.customer_portal_url.rstrip("/") + "/customer?canceled=1",
@@ -353,6 +373,18 @@ def billing(customer: Customer = Depends(current_customer), db: Session = Depend
     return {"url": session["url"]}
 
 
+@customer_api.post("/subscription/refresh")
+def refresh_subscription(customer: Customer = Depends(current_customer), db: Session = Depends(get_db)) -> dict:
+    # Recover a delayed/missed subscription webhook without taking another payment.
+    db.execute(update(Customer).where(Customer.id == customer.id).values(company_name=customer.company_name))
+    binding = db.get(CustomerLicense, customer.id)
+    if not binding:
+        raise HTTPException(404, "No paid subscription found")
+    reconcile_subscription(db, binding.subscription_id)
+    db.commit()
+    return {"status": entitlement_status(db, db.get(License, binding.license_id)).value}
+
+
 @router.post("/v1/webhooks/stripe")
 async def webhook(request: Request, db: Session = Depends(get_db)) -> dict:
     secret = get_settings().stripe_webhook_secret
@@ -362,6 +394,12 @@ async def webhook(request: Request, db: Session = Depends(get_db)) -> dict:
         event = stripe.Webhook.construct_event(await request.body(), request.headers.get("stripe-signature", ""), secret)
     except (ValueError, stripe.SignatureVerificationError) as exc:
         raise HTTPException(400, "Invalid webhook signature or payload") from exc
+    return await run_in_threadpool(process_stripe_event, event, db)
+
+
+def process_stripe_event(event: dict, db: Session) -> dict:
+    # Stripe retrieval and database locking are synchronous. Keep them off the
+    # event loop so a slow provider or lock does not freeze the public portal.
     if db.get(PaymentEvent, event["id"]):
         return {"received": True}
     try:

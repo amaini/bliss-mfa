@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import base64
 import json
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from cryptography.hazmat.primitives import serialization
@@ -29,7 +29,7 @@ def get_signing_key() -> Ed25519PrivateKey:
         raise RuntimeError("License signing key is not configured")
     key = serialization.load_pem_private_key(pem.encode(), password=None)
     if not isinstance(key, Ed25519PrivateKey):
-        raise RuntimeError("License signing key must be Ed25519")
+        raise RuntimeError("License signing key must be Ed25519")  # noqa: TRY004 - configuration failure
     return key
 
 

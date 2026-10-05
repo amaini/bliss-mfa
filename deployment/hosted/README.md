@@ -11,6 +11,10 @@ The included WordPress plugin's `[bliss_mfa]` shortcode links to the separate
 licensing/client portal at https://license.blissitek.ca/customer. Purchases use
 the existing Stripe subscription flow; they do not create WooCommerce orders.
 
+The current Windows pilot candidate and exact deployment hashes are recorded in
+`PILOT-0.1.2.md`. Prepare the empty public update directory described there before
+using either stack; publishing the feed remains gated by Windows acceptance.
+
 ## Deployment inputs
 
 Use a Linux VPS or Docker-capable host with Docker Compose and persistent storage.

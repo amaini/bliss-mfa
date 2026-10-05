@@ -56,10 +56,20 @@ def verify(archive, directory):
     try:
         origin = 'https://localhost:' + str(appliance['tls_port'])
         context = ssl.create_default_context(cafile=config['certificate_file'])
+        readiness = [
+            (f"http://127.0.0.1:{appliance['api_port']}/health", {}),
+            (f"http://127.0.0.1:{appliance['agent_port']}/health",
+             {'Authorization': 'Bearer ' + appliance['agent_token']}),
+            (f"http://127.0.0.1:{config['adapter_port']}/health",
+             {'Authorization': 'Bearer ' + config['adapter_token']}),
+        ]
         with httpx.Client(base_url=origin, verify=context, timeout=20, trust_env=False) as client:
             for _ in range(100):
                 try:
-                    if client.get('/setup').status_code == 200:
+                    if (client.get('/setup').status_code == 200 and all(
+                        httpx.get(url, headers=headers, timeout=2, trust_env=False).status_code == 200
+                        for url, headers in readiness
+                    )):
                         break
                 except httpx.HTTPError:
                     pass
