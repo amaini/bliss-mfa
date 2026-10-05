@@ -136,7 +136,16 @@ def restore(root, transaction):
     private = root / 'bliss-mfa/.local'
     # Validated root-owned path only; never delete a computed external path.
     no_links(private)
-    shutil.rmtree(private)
+    # Windows can retain a database/log handle briefly after SCM reports Stopped.
+    # Retry only access errors, retaining the recovery journal on final failure.
+    for attempt in range(10):
+        try:
+            shutil.rmtree(private)
+            break
+        except PermissionError:
+            if attempt == 9:
+                raise
+            time.sleep(.5)
     shutil.copytree(transaction / 'private', private)
     readiness(root)
     (transaction / 'journal.json').unlink()

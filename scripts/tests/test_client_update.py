@@ -78,7 +78,8 @@ def engine_config(root):
         [('state_dir', 'state'), ('certificate_file', 'cert.pem'), ('certificate_key_file', 'cert.key')]}))
 
 
-def test_rollback_restores_files_and_database(tmp_path, monkeypatch):
+@pytest.mark.parametrize('temporary_lock', [False, True])
+def test_rollback_restores_files_and_database(tmp_path, monkeypatch, temporary_lock):
     root, staged, transaction = (tmp_path / p for p in ('root', 'staged', 'transaction'))
     engine_config(root)
     (root / 'bliss-mfa/.local/appliance.db').write_bytes(b'original-database')
@@ -98,6 +99,18 @@ def test_rollback_restores_files_and_database(tmp_path, monkeypatch):
         actions.append('Recovered')
 
     monkeypatch.setattr(updater, 'readiness', readiness)
+    removals = []
+    real_remove = updater.shutil.rmtree
+
+    def remove(path):
+        removals.append(path)
+        if temporary_lock and len(removals) == 1:
+            raise PermissionError('Database handle is closing')
+        real_remove(path)
+
+    sleeps = []
+    monkeypatch.setattr(updater.shutil, 'rmtree', remove)
+    monkeypatch.setattr(updater.time, 'sleep', sleeps.append)
     with pytest.raises(RuntimeError, match='New service failed'):
         updater.apply(root, staged, transaction)
     assert (root / 'portal/server.js').read_text() == 'old'
@@ -105,6 +118,32 @@ def test_rollback_restores_files_and_database(tmp_path, monkeypatch):
     assert (root / 'bliss-mfa/.local/appliance.db').read_bytes() == b'original-database'
     assert actions == ['Stop', 'Stop', 'Recovered']
     assert not (transaction / 'journal.json').exists()
+    assert sleeps == ([.5] if temporary_lock else [])
+
+
+def test_persistent_rollback_lock_retains_recovery_snapshot(tmp_path, monkeypatch):
+    root, transaction = (tmp_path / p for p in ('root', 'transaction'))
+    engine_config(root)
+    private = root / 'bliss-mfa/.local'
+    (private / 'appliance.db').write_bytes(b'original-database')
+    updater.shutil.copytree(private, transaction / 'private')
+    (transaction / 'journal.json').write_text(json.dumps({'files': []}))
+    actions, sleeps, removals = [], [], []
+
+    def locked(path):
+        removals.append(path)
+        raise PermissionError('Persistent lock')
+
+    monkeypatch.setattr(updater, 'service', actions.append)
+    monkeypatch.setattr(updater.shutil, 'rmtree', locked)
+    monkeypatch.setattr(updater.time, 'sleep', sleeps.append)
+    monkeypatch.setattr(updater, 'readiness', lambda _: actions.append('Started'))
+    with pytest.raises(PermissionError, match='Persistent lock'):
+        updater.restore(root, transaction)
+    assert len(removals) == 10 and len(sleeps) == 9
+    assert actions == ['Stop']
+    assert (transaction / 'journal.json').exists()
+    assert (transaction / 'private/appliance.db').read_bytes() == b'original-database'
 
 
 def test_success_preserves_private_state(tmp_path, monkeypatch):
