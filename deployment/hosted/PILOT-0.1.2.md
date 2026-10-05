@@ -1,16 +1,16 @@
 # Windows paid pilot deployment handoff
 
 The candidate is built from application commit
-`618e1c2d6bade38acde920a1255da00ff51c1370`. All seven Appliance CI jobs passed.
-Current private files are in `.local/pilot-release-0.1.2-ci` in the primary
+`aec259fbceaeea787e9aceca76e90fe1029536ad`. All seven Appliance CI jobs passed.
+Current private files are in `.local/pilot-release-0.1.2-rc2` in the primary
 checkout. They have not been published. Do not use the earlier candidate or the
 historical v0.1.0 prototype hash in `INSTALLER.md` for this release.
 
 | File | SHA256 |
 |---|---|
-| bliss-mfa-windows-pilot-0.1.2.zip | 771f09e340e2c052b6d1bcbea8a5d73d05f8f1c5a71a587245f9722cb60d621c |
-| appliance-deployment-0.1.2.zip | b2f1767f2edb7a5c09d02c3eaac6262cc780b1850665756d7ce7e5014213d14a |
-| bliss-mfa-update-0.1.2.zip | 6e10c494da8bf4b3fcab3a17ac29eb209fd62ead7c24d998f29ee6444c0dc518 |
+| bliss-mfa-windows-pilot-0.1.2.zip | 57ede8cb2a2847b7dbe556f2d82c16da7dab5b99caa696ecaadd1c1b33a6cd9d |
+| appliance-deployment-0.1.2.zip | d56758cbbbd7a096b85a91c414341eec235633c86b2074f3bcf322d4e73dbfc3 |
+| bliss-mfa-update-0.1.2.zip | 77ae94db9db60e01b66825e2d15d895cadfd18892100be81a939b76fee34c314 |
 
 ## Prepare the hosted backend
 
@@ -46,7 +46,7 @@ using the authorized private server connection. On the Docker endpoint:
 ```sh
 set -eu
 cd /opt/bliss-mfa/releases
-echo '771f09e340e2c052b6d1bcbea8a5d73d05f8f1c5a71a587245f9722cb60d621c  windows.zip.new' | sha256sum --check
+echo '57ede8cb2a2847b7dbe556f2d82c16da7dab5b99caa696ecaadd1c1b33a6cd9d  windows.zip.new' | sha256sum --check
 mv windows.zip.new windows.zip
 ```
 
@@ -77,4 +77,6 @@ version with different bytes. The signed download URL is
   production data.
 
 Public health and source CI alone do not prove any of these deployed results.
-Server access and restored VM remoting are still required to complete them.
+Server access is still required for hosted acceptance. VM remoting is restored;
+installed upgrade, rollback and post-reboot service checks have passed. Fresh
+installation and interactive Windows MFA acceptance remain pending.

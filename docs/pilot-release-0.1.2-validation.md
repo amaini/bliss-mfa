@@ -33,12 +33,12 @@ customer acceptance. Main and deployed customer artifacts were not replaced.
 |---|---|
 | Appliance API, schema preservation and invalid state transitions | 34 passed |
 | Licensing, customer, trial, payment and feed regression suite | 53 passed on real PostgreSQL; SQLite 51 passed and 2 PostgreSQL cases skipped |
-| Updater, backup, packaging and signing-key tests | 38 passed |
+| Updater, backup, packaging and signing-key tests | 40 passed in current CI; updater subset 27 passed locally |
 | Licensing agent | 10 passed |
 | Engine adapter/native/proxy | 41 passed |
 | Next.js portal production build and TypeScript | Passed, 15.5.27 |
 | Real HTTP portal origin checks | 18/18 passed |
-| Exact packaged local onboarding | 11/11 passed |
+| Previous candidate packaged local onboarding | 11/11 passed; repeat on RC2 during fresh installation |
 | Prior packaged engine via native TLS/CGI | Fresh OTP passed; replay and incorrect OTP denied; repeat on current candidate during VM acceptance |
 | Full service Ruff and whitespace checks | Passed |
 | Artifact manifest, signature, keys and configured-secret verification | Passed, 4209 appliance files and 2084 update files |
@@ -55,17 +55,17 @@ The first failed extraction is retained privately as evidence.
 
 ## Local candidate artifacts
 
-Current private staging directory: `.local/pilot-release-0.1.2-ci` in the primary checkout.
-Built application source: `618e1c2d6bade38acde920a1255da00ff51c1370`.
-All seven [GitHub Appliance CI jobs](https://github.com/amaini/bliss-mfa/actions/runs/37237072163) passed on this source commit.
+Current private staging directory: `.local/pilot-release-0.1.2-rc2` in the primary checkout.
+Built application source: `aec259fbceaeea787e9aceca76e90fe1029536ad`.
+All seven [GitHub Appliance CI jobs](https://github.com/amaini/bliss-mfa/actions/runs/37256769971) passed on this source commit.
 The earlier `.local/pilot-release-0.1.2` candidate is retained privately and superseded.
 These files are built and verified locally, not published customer downloads.
 
 | Artifact | SHA256 |
 |---|---|
-| appliance-deployment-0.1.2.zip | b2f1767f2edb7a5c09d02c3eaac6262cc780b1850665756d7ce7e5014213d14a |
-| bliss-mfa-windows-pilot-0.1.2.zip | 771f09e340e2c052b6d1bcbea8a5d73d05f8f1c5a71a587245f9722cb60d621c |
-| bliss-mfa-update-0.1.2.zip | 6e10c494da8bf4b3fcab3a17ac29eb209fd62ead7c24d998f29ee6444c0dc518 |
+| appliance-deployment-0.1.2.zip | d56758cbbbd7a096b85a91c414341eec235633c86b2074f3bcf322d4e73dbfc3 |
+| bliss-mfa-windows-pilot-0.1.2.zip | 57ede8cb2a2847b7dbe556f2d82c16da7dab5b99caa696ecaadd1c1b33a6cd9d |
+| bliss-mfa-update-0.1.2.zip | 77ae94db9db60e01b66825e2d15d895cadfd18892100be81a939b76fee34c314 |
 
 The detached signed feed is `bliss-mfa-update-0.1.2.signed.json` beside the ZIP.
 Update public PEM SHA256:
@@ -84,9 +84,13 @@ Verification output is `verification.json`; packaged onboarding output is
 - Restricted Stripe key can read the price/webhook list but `/v1/account` returns
   403. Resend's key is sending-only, so domain status could not be read; actual
   registration delivery remains an acceptance requirement.
-- VM RDP port is reachable; WinRM times out. The user is restoring its existing
-  remote command channel. Exact release clean installation, installed-service
-  upgrade/rollback and Windows desktop OTP cases remain pending.
+- WinRM access restored. On Windows 10 Pro build 19045, RC2 passes all 15
+  installed-service checks: exact hashes/signature, encrypted snapshot restore,
+  0.1.1 to 0.1.2 upgrade, schema adoption, rollback, failed-readiness recovery,
+  state preservation and pinned-key/version integration. After a real VM reboot,
+  engine, adapter, appliance API, license agent and HTTPS portal all returned
+  HTTP 200; BlissMFAEngine and WinRM are running with automatic startup.
+  Fresh installation and interactive desktop/RDP OTP checks remain pending.
 - Confirm real payment delivery, deployed PostgreSQL backup/account preservation,
   paid installer checksum/download and installed activation. Deploy the verified
   installer and public-only signed feed only after the VM release checks pass.
@@ -100,3 +104,21 @@ dependency metadata safe in defaults. Current PostgreSQL evidence is
 `.local/pg-pilot-c252be66/tests.log`, run with a non-superuser database role.
 Subscription replacement preserves the installed license identity, rejects duplicate
 active purchases and retains administrator revocation; see `subscription-lifecycle-validation.md`.
+
+## Actual installed-service acceptance
+
+Evidence: `.local/pilot-release-0.1.2-rc2/vm-installed-release.json` on the
+controller and `C:\BlissMFA-TestRuns\pilot-aec259f\installed-release-results.json`
+on the VM. The VM is left on 0.1.2 after successful upgrade/recovery checks.
+The preexisting database contained one owner, one bootstrap seal and zero MFA
+users: these checks preserve actual existing rows/configuration but do not prove
+populated enrollment preservation. Add enrolled-user coverage in the next phase.
+
+The first two rollback attempts were invalidated by the acceptance harness
+leaving a SQLite inspection connection open. SQLite connection context managers
+commit/roll back transactions but do not close the connection. Explicitly closing
+both inspection connections allowed the full installed rollback and failure
+recovery checks to pass. The bounded Windows PermissionError retry remains
+covered by transient-lock and persistent-lock recovery tests; persistent errors
+retain the journal and recovery snapshot. RC1 is retained as a superseded draft,
+not evidence of a proven product rollback defect.

@@ -39,7 +39,10 @@ prove an interactive desktop/RDP login. Existing installed files do not prove a
 clean installation. A restored network connection does not prove any release
 test has run.
 
-The first inspection succeeded, but subsequent authenticated WinRM commands
-timed out while unauthenticated HTTP remained reachable. No 0.1.2 installation
-or MFA change had been applied at that point. An administrator WinRM restart was
-requested. Complete the release checks after authenticated execution recovers.
+Authenticated WinRM recovered after a service restart. RC2 passed installed
+upgrade, rollback, failed-readiness recovery and encrypted backup checks, then
+all five application endpoints passed health checks after a real reboot. Both
+BlissMFAEngine and WinRM are running with automatic startup. Credentials and
+private backups remain in protected, ignored storage. See the release validation
+document for exact scope: fresh installation and interactive Windows MFA are
+still pending.
