@@ -95,3 +95,19 @@ def test_serve_delegates_to_the_isolating_supervisor(tmp_path, monkeypatch, chec
     assert calls[0] == ('start', check)
     assert ('run',) in calls if not check else ('run',) not in calls
     assert calls[-1] == ('stop',)
+
+
+def agent_env(tmp_path, version=None):
+    repo, config = engine(tmp_path)
+    if version:
+        (repo / 'deployment').mkdir(parents=True, exist_ok=True)
+        (repo / 'deployment/release-version.json').write_text(json.dumps({'version': version}))
+    return next(c for c in run_engine.components(config, repo=repo) if c.name == 'license-agent').env
+
+
+def test_license_agent_reports_the_installed_release_version(tmp_path):
+    assert agent_env(tmp_path, '0.1.3')['SOFTWARE_VERSION'] == '0.1.3'
+
+
+def test_missing_release_version_is_reported_as_unknown_not_a_real_version(tmp_path):
+    assert agent_env(tmp_path)['SOFTWARE_VERSION'] == 'unknown'

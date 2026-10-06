@@ -23,3 +23,13 @@ def test_reinstall_inspects_identity_before_changing_any_file():
     assert text.index('--inspect-retained') < text.index('Merge-ReinstallFiles.ps1')
     assert "Test-Manifest $staging" in text
     assert text.index('Test-Manifest $staging') < text.index('Merge-ReinstallFiles.ps1')
+
+
+def test_installed_version_comes_from_the_release_not_a_leftover_installation_record():
+    # Uninstall leaves Program Files\Bliss MFA\installation.json behind; a reinstall of a
+    # newer release must record the release's own version.
+    text = (Path(__file__).parents[1] / 'Install-WindowsIntegration.ps1').read_text()
+    release = text.index('release-version.json')
+    leftover = text.index("Test-Path -LiteralPath $existing")
+    assert 'elseif (Test-Path -LiteralPath $existing)' in text
+    assert release < leftover

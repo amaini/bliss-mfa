@@ -2,6 +2,7 @@
 import html
 import json
 import os
+import re
 import secrets
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -42,6 +43,17 @@ def initialize(engine_path, license_url, public_key_file):
 
 
 RECOVERY_DOC = 'docs/reinstall-and-identity-recovery.md'
+
+
+def release_version(repo):
+    """The single authoritative installed version, written by the build and replaced by signed updates."""
+    try:
+        version = json.loads((repo / 'deployment/release-version.json').read_text(encoding='utf-8-sig'))['version']
+    except (OSError, ValueError, KeyError):
+        return 'unknown'
+    return version if isinstance(version, str) and re.fullmatch(r'\d+\.\d+\.\d+', version) else 'unknown'
+
+
 IDENTITY_FILES = ('installation.json', 'device.key')
 ACTIVATION_EVIDENCE = ('lease.token', 'trusted-time.json', 'released.json')
 
@@ -105,7 +117,8 @@ def processes(repo, engine_config, state_parent, python):
         LICENSE_AGENT_URL=f"http://127.0.0.1:{config['agent_port']}", LICENSE_AGENT_TOKEN=config['agent_token'])
     agent_env = dict(common, PYTHONPATH=str(repo / 'services/license-agent'),
         STATE_DIR=config['license_state_dir'], LICENSE_SERVER_URL=config['license_url'],
-        AGENT_SHARED_TOKEN=config['agent_token'], BLISS_SIGNING_PUBLIC_KEY_FILE=config['public_key_file'])
+        AGENT_SHARED_TOKEN=config['agent_token'], BLISS_SIGNING_PUBLIC_KEY_FILE=config['public_key_file'],
+        SOFTWARE_VERSION=release_version(repo))
     portal_env = dict(common, NODE_ENV='production', HOSTNAME='127.0.0.1', PORT=str(config['portal_port']),
         APPLIANCE_API_URL=f"http://127.0.0.1:{config['api_port']}", NEXT_TELEMETRY_DISABLED='1')
     proxy_env = dict(common, PYTHONPATH=str(repo / 'services/multiotp-adapter'),

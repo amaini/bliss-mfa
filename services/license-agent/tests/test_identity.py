@@ -56,3 +56,10 @@ def test_lost_identity_blocks_new_seats_only(tmp_path):
     result = LicenseState(str(tmp_path)).reserve_seat("alice")
     assert result["allowed"] is False
     assert "identity_lost" in result["reason"]
+
+
+def test_unconfigured_software_version_is_not_reported_as_a_release(monkeypatch):
+    from license_agent.config import Settings
+
+    monkeypatch.delenv("SOFTWARE_VERSION", raising=False)
+    assert Settings(_env_file=None).software_version == "unknown"

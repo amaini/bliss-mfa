@@ -9,7 +9,8 @@ class Settings(BaseSettings):
     state_dir: str = "/var/lib/bliss-mfa/license"
     bliss_signing_public_key_pem: str | None = None
     bliss_signing_public_key_file: str | None = None
-    software_version: str = "0.1.0"
+    # Set from deployment/release-version.json by the appliance runtime.
+    software_version: str = "unknown"
     heartbeat_timeout_seconds: int = 15
     agent_shared_token: str | None = None
 
