@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     license_agent_token: str | None = None
     local_portal_url: str = "http://127.0.0.1:9443"
     heartbeat_interval_hours: int = 24
+    # First heartbeat soon after start: appliances restarted daily must still renew their lease.
+    heartbeat_startup_delay_seconds: int = 60
 
 @lru_cache
 def get_settings() -> Settings:

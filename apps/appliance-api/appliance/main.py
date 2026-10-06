@@ -4,6 +4,7 @@ import hmac
 import json
 import os
 import subprocess
+from datetime import UTC, datetime, timedelta
 
 import httpx
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -157,6 +158,7 @@ def start_heartbeat_scheduler() -> None:
         automatic_license_heartbeat,
         "interval",
         hours=settings.heartbeat_interval_hours,
+        next_run_time=datetime.now(UTC) + timedelta(seconds=settings.heartbeat_startup_delay_seconds),
         id="bliss-license-heartbeat",
         replace_existing=True,
     )
