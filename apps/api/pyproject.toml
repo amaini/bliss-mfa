@@ -31,6 +31,10 @@ testpaths = ["tests"]
 line-length = 100
 target-version = "py312"
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI dependency markers are declarative metadata, safe as defaults.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Header", "fastapi.Query"]
+
 [tool.setuptools.packages.find]
 # Only the application package: alembic/ holds migration scripts and must not
 # be installed as a top-level package that shadows the alembic library.

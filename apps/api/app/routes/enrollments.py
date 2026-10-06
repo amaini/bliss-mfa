@@ -1,12 +1,13 @@
 import hashlib
 import secrets
-from datetime import timedelta, timezone
+from datetime import UTC, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..audit import write_audit
+from ..authorization import OrganizationAccess, require_org_manage
 from ..config import get_settings
 from ..db import get_db
 from ..dependencies import get_multiotp_adapter
@@ -26,8 +27,6 @@ from ..schemas import (
     EnrollmentVerifyRequest,
     RevokeDeviceRequest,
 )
-from ..authorization import OrganizationAccess, require_org_manage
-
 
 router = APIRouter(tags=["enrollment"])
 
@@ -124,7 +123,7 @@ def verify_enrollment(
     now = utcnow()
     expires_at = enrollment.expires_at
     if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
+        expires_at = expires_at.replace(tzinfo=UTC)
     if expires_at < now:
         enrollment.status = EnrollmentStatus.expired
         db.commit()

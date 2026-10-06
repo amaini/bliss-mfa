@@ -15,7 +15,6 @@ from ..models import (
 )
 from ..schemas import OrganizationStatsRead
 
-
 router = APIRouter(
     prefix="/organizations/{organization_id}/stats",
     tags=["dashboard"],

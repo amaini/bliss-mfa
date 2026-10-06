@@ -33,7 +33,6 @@ from ..schemas import (
     OnboardingStatusRead,
 )
 
-
 router = APIRouter(prefix="/billing", tags=["billing"])
 
 PLAN_SEATS = {

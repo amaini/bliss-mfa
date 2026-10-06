@@ -14,7 +14,6 @@ from ..models import (
 )
 from ..schemas import MembershipCreate, MembershipRead, MyOrganizationRead, PrincipalRead
 
-
 router = APIRouter(tags=["portal"])
 
 

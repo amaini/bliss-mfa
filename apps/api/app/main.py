@@ -14,7 +14,6 @@ from .routes.portal import router as portal_router
 from .routes.users import router as users_router
 from .schemas import HealthRead
 
-
 settings = get_settings()
 
 

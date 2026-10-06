@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -15,7 +15,7 @@ def new_uuid() -> str:
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class OrganizationStatus(str, enum.Enum):
@@ -91,8 +91,8 @@ class Organization(Base):
     seat_limit: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
-    users: Mapped[list["MfaUser"]] = relationship(back_populates="organization")
-    subscription: Mapped["Subscription | None"] = relationship(
+    users: Mapped[list[MfaUser]] = relationship(back_populates="organization")
+    subscription: Mapped[Subscription | None] = relationship(
         back_populates="organization", uselist=False
     )
 
@@ -113,8 +113,8 @@ class MfaUser(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     organization: Mapped[Organization] = relationship(back_populates="users")
-    devices: Mapped[list["MfaDevice"]] = relationship(back_populates="user")
-    enrollments: Mapped[list["Enrollment"]] = relationship(back_populates="user")
+    devices: Mapped[list[MfaDevice]] = relationship(back_populates="user")
+    enrollments: Mapped[list[Enrollment]] = relationship(back_populates="user")
 
 
 class MfaDevice(Base):

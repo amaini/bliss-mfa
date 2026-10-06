@@ -12,7 +12,6 @@ from app.dependencies import get_multiotp_adapter
 from app.main import app
 from app.multiotp import MockMultiOtpAdapter
 
-
 engine = create_engine(
     "sqlite+pysqlite://",
     connect_args={"check_same_thread": False},

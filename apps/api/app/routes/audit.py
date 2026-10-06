@@ -7,7 +7,6 @@ from ..db import get_db
 from ..models import AuditEvent, Organization
 from ..schemas import AuditEventRead
 
-
 router = APIRouter(
     prefix="/organizations/{organization_id}/audit",
     tags=["audit"],

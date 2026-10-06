@@ -3,6 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..audit import write_audit
+from ..authorization import OrganizationAccess, require_org_manage, require_org_read
 from ..db import get_db
 from ..dependencies import get_multiotp_adapter
 from ..models import MfaUser, Organization, UserStatus
@@ -14,8 +15,6 @@ from ..schemas import (
     UserActionReason,
     UserResyncRequest,
 )
-from ..authorization import OrganizationAccess, require_org_manage, require_org_read
-
 
 router = APIRouter(
     prefix="/organizations/{organization_id}/users",

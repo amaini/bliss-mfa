@@ -2,11 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..auth import Principal, require_admin_principal, require_staff_principal
 from ..db import get_db
 from ..models import Organization
 from ..schemas import OrganizationCreate, OrganizationRead
-from ..auth import Principal, require_admin_principal, require_staff_principal
-
 
 router = APIRouter(
     prefix="/organizations",
