@@ -48,7 +48,11 @@ def activate_online(payload: OnlineActivationRequest) -> dict:
 @app.post("/v1/heartbeat")
 def heartbeat(payload: HeartbeatInput) -> dict:
     try:
-        return client.heartbeat(state.seat_count(), payload.audit_head_hash)
+        # Report the more conservative usage: the local seat ledger or the appliance's
+        # count of protected users. Only the number leaves the appliance; entitlement is
+        # still enforced locally from the signed max_rdp_users.
+        usage = max(state.seat_count(), payload.protected_rdp_users)
+        return client.heartbeat(usage, payload.audit_head_hash)
     except HTTPError:
         # A failed heartbeat does not erase the last valid signed lease. The
         # effective status endpoint will move through offline_grace/restricted.
