@@ -10,7 +10,7 @@ New-Item -ItemType Directory -Path $tools -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Uninstall-BlissMFA.ps1') -Destination (Join-Path $tools 'Uninstall-BlissMFA.ps1') -Force
 $existing=Join-Path $tools 'installation.json'
 $releaseVersion=Join-Path $rootPath 'bliss-mfa\deployment\release-version.json'
-# deploymentelease-version.json is authoritative; signed updates replace it. A leftover record
+# deployment\release-version.json is authoritative; signed updates replace it. A leftover record
 # from an earlier installation is used only for releases that predate the version file.
 if (Test-Path -LiteralPath $releaseVersion) { $Version=(Get-Content $releaseVersion -Raw | ConvertFrom-Json).version }
 elseif (Test-Path -LiteralPath $existing) { $Version=(Get-Content $existing -Raw | ConvertFrom-Json).Version }
