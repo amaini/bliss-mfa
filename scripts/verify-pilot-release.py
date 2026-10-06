@@ -9,7 +9,6 @@ from pathlib import Path
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-from dotenv import dotenv_values
 
 
 def digest(path):
@@ -23,6 +22,8 @@ def verify(args):
     spec.loader.exec_module(updater)
     private_values = []
     if args.private_env:
+        from dotenv import dotenv_values  # only needed for the optional private-value scan
+
         for name, value in dotenv_values(args.private_env).items():
             if value and len(value) >= 8 and any(
                 part in name.upper() for part in ("SECRET", "PASSWORD", "TOKEN", "API_KEY")
