@@ -41,3 +41,25 @@ def test_provider_staging_uses_a_fresh_backup_directory_per_installation():
     text = (Path(__file__).parents[1] / 'Stage-BlissProvider.ps1').read_text()
     assert "$backup=Join-Path $Root 'provider-backup'\n" not in text.replace('\r\n', '\n')
     assert r"Join-Path $Root ('provider-backup\'+(Get-Date -Format 'yyyyMMdd-HHmmss'))" in text
+
+
+def test_provider_client_base_dir_never_ends_with_a_backslash():
+    # Found on the test VM: multiotp.exe re-quotes its arguments, so a trailing backslash
+    # escapes the closing quote, chdir() fails and the client never contacts the server
+    # (exit 19 with the service up or down). Without it the server answers in ~0.6 s.
+    import re
+
+    for script in SCRIPTS:
+        text = script.read_text()
+        for match in re.finditer(r"-base-dir='\+[^\n]*", text):
+            assert not re.search(r"\+'\\'\)", match.group(0)), script.name
+
+
+def test_enable_protection_checks_the_client_exit_code_not_its_stderr():
+    # The stock client can print PHP warnings on stderr; under $ErrorActionPreference='Stop'
+    # a redirected native stderr line aborts the script before $LASTEXITCODE is checked.
+    text = (Path(__file__).parents[1] / 'Enable-RdpProtection.ps1').read_text()
+    call = next(line for line in text.splitlines() if "& $client -cp" in line)
+    assert "*> $null" not in call
+    before = text[:text.index(call)]
+    assert before.rstrip().splitlines()[-1].strip().startswith("$ErrorActionPreference='Continue'")

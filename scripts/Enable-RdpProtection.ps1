@@ -28,9 +28,17 @@ try {
     if ($code -notmatch '^\d{6}$') { throw 'Enter a six-digit authenticator code.' }
     if ($code -eq '000000') { throw 'Wait for the next authenticator code, then retry.' }
     $client=Join-Path $provider.multiOTPPath 'multiotp.exe'
-    # Consume the code once through the same installed client used by Windows.
-    & $client -cp ('-base-dir='+(Join-Path $Root 'provider-validation')+'\') '-server-cache-level=0' '-server-timeout=2' ('-server-url=https://127.0.0.1:'+$config.auth_port+'/auth') ('-server-secret='+$config.native_shared_secret) $ProtectedUser $code *> $null
-    if ($LASTEXITCODE -ne 0) { throw 'Native verification failed. Wait for a new authenticator code and retry.' }
+    # Consume the code once through the same installed client used by Windows. No trailing
+    # backslash on -base-dir: multiotp.exe re-quotes arguments and \" would corrupt the path,
+    # so the client never contacts the server. The client may print PHP warnings on stderr;
+    # only its exit code decides the result.
+    $base=Join-Path $Root 'provider-validation'
+    New-Item -ItemType Directory -Path $base -Force | Out-Null
+    $ErrorActionPreference='Continue'
+    & $client -cp ('-base-dir='+$base) '-server-cache-level=0' '-server-timeout=5' ('-server-url=https://127.0.0.1:'+$config.auth_port+'/auth') ('-server-secret='+$config.native_shared_secret) $ProtectedUser $code 2>&1 | Out-Null
+    $verified=$LASTEXITCODE
+    $ErrorActionPreference='Stop'
+    if ($verified -ne 0) { throw 'Native verification failed. Wait for a new authenticator code and retry.' }
 } finally {
     [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
     $code=$null
