@@ -83,3 +83,37 @@ def test_packaging_preflight_leaves_no_partial_release(packaging, problem):
         (inputs / "WinSW-x64.exe").unlink()
     assert subprocess.run(command, capture_output=True).returncode != 0
     assert not output.exists()
+
+
+def test_identical_inputs_build_byte_identical_releases(packaging, tmp_path):
+    import os
+    import time
+
+    command, inputs, output = packaging
+    first = tmp_path / "first.zip"
+    second = tmp_path / "second.zip"
+    env = {**os.environ, "SOURCE_DATE_EPOCH": "1767225600"}
+    assert subprocess.run(command[:-4] + ["--output", str(first), "--version", "0.1.2"], env=env).returncode == 0
+    later = time.time() + 3600
+    for path in inputs.rglob("*"):
+        os.utime(path, (later, later))
+    time.sleep(2)  # a different wall clock as well as different file times
+    assert subprocess.run(command[:-4] + ["--output", str(second), "--version", "0.1.2"], env=env).returncode == 0
+    assert first.read_bytes() == second.read_bytes()
+
+
+def test_customer_wrapper_is_reproducible(packaging, tmp_path):
+    import os
+
+    command, _, output = packaging
+    assert subprocess.run(command, capture_output=True).returncode == 0
+    wrapper = Path(__file__).resolve().parents[1] / "build-client-release.py"
+    env = {**os.environ, "SOURCE_DATE_EPOCH": "1767225600"}
+    built = []
+    for name in ("a", "b"):
+        target = tmp_path / name / "bliss-mfa-windows.zip"
+        result = subprocess.run([sys.executable, str(wrapper), "--archive", str(output), "--output", str(target)],
+                                env=env, capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        built.append(target.read_bytes())
+    assert built[0] == built[1]

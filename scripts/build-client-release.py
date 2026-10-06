@@ -2,6 +2,9 @@
 import argparse
 import hashlib
 import json
+import os
+import shutil
+import time
 import zipfile
 from pathlib import Path
 
@@ -87,17 +90,31 @@ For encrypted backup, stop BlissMFAEngine, run the included engine-backup.py wit
 Restore into a new directory; restoring never overwrites a live installation.
 '''
 args.output.parent.mkdir(parents=True, exist_ok=True)
-with zipfile.ZipFile(args.output, 'w', zipfile.ZIP_DEFLATED) as release:
+# Reproducible wrapper: fixed entry timestamp (SOURCE_DATE_EPOCH convention) and mode.
+ZIP_TIME = time.gmtime(int(os.environ.get('SOURCE_DATE_EPOCH', '315532800')))[:6]
+
+
+def entry(name, compression=zipfile.ZIP_DEFLATED):
+    info = zipfile.ZipInfo(name, ZIP_TIME)
+    info.compress_type = compression
+    info.external_attr = 0o644 << 16
+    return info
+
+
+with zipfile.ZipFile(args.output, 'w') as release:
     # Already compressed; avoid a second costly compression pass.
-    release.write(args.archive, 'BlissMFA-Appliance.zip', compress_type=zipfile.ZIP_STORED)
-    release.writestr('Install-BlissEngine.ps1', (REPO / 'scripts/Install-BlissEngine.ps1').read_bytes())
+    with args.archive.open('rb') as source, release.open(entry('BlissMFA-Appliance.zip', zipfile.ZIP_STORED),
+                                                         'w', force_zip64=True) as target:
+        shutil.copyfileobj(source, target, 1 << 20)
+    release.writestr(entry('Install-BlissEngine.ps1'), (REPO / 'scripts/Install-BlissEngine.ps1').read_bytes())
     for name in ('Install-WindowsIntegration.ps1', 'Uninstall-BlissMFA.ps1', 'Update-BlissMFA.ps1', 'client-update.py'):
-        release.writestr(name, (REPO / 'scripts' / name).read_bytes())
-    release.writestr('Setup-BlissMFA.ps1', setup)
-    release.writestr('Enable-RdpProtection.ps1', enable)
-    release.writestr('README.txt', guide)
+        release.writestr(entry(name), (REPO / 'scripts' / name).read_bytes())
+    release.writestr(entry('Setup-BlissMFA.ps1'), setup)
+    release.writestr(entry('Enable-RdpProtection.ps1'), enable)
+    release.writestr(entry('README.txt'), guide)
     for name in ('Setup-BlissMFA', 'Enable-RdpProtection'):
-        release.writestr(name + '.cmd', '@echo off\r\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0' + name + '.ps1"\r\n')
+        release.writestr(entry(name + '.cmd'),
+                         '@echo off\r\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0' + name + '.ps1"\r\n')
 with args.output.open('rb') as stream:
     release_digest = hashlib.file_digest(stream, 'sha256').hexdigest()
 metadata = {'filename': args.output.name, 'sha256': release_digest,

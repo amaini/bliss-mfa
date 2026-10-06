@@ -7,6 +7,8 @@ Download artifacts from their official publishers and verify installer signature
 import argparse
 import hashlib
 import json
+import os
+import time
 import zipfile
 from pathlib import Path
 
@@ -68,12 +70,21 @@ if OUTPUT.exists():
     parser.error('Output already exists; choose a new release path')
 OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 MANIFEST = {}
+# Reproducible archives: a fixed entry timestamp (SOURCE_DATE_EPOCH convention) and mode.
+ZIP_TIME = time.gmtime(int(os.environ.get('SOURCE_DATE_EPOCH', '315532800')))[:6]
+
+
+def entry(name):
+    info = zipfile.ZipInfo(name, ZIP_TIME)
+    info.compress_type = zipfile.ZIP_DEFLATED
+    info.external_attr = 0o644 << 16
+    return info
 
 
 def add(archive, name, data):
     if name in MANIFEST:
         raise RuntimeError('Duplicate archive path: ' + name)
-    archive.writestr(name, data)
+    archive.writestr(entry(name), data)
     MANIFEST[name] = hashlib.sha256(data).hexdigest()
 
 
@@ -137,6 +148,6 @@ with zipfile.ZipFile(OUTPUT, 'x', compression=zipfile.ZIP_DEFLATED) as archive:
     tree(archive, WORK / 'php-runtime', 'php-runtime')
     for source in [INPUT / 'vc_redist.x64.exe', INPUT / 'provider/multiOTPCredentialProviderInstaller.msi']:
         add(archive, 'installers/' + source.name, source.read_bytes())
-    archive.writestr('manifest.json', json.dumps(MANIFEST, indent=2))
+    archive.writestr(entry('manifest.json'), json.dumps(MANIFEST, indent=2))
 print(f'Built {OUTPUT} ({OUTPUT.stat().st_size} bytes, {len(MANIFEST)} files)')
 print('SHA256: ' + hashlib.sha256(OUTPUT.read_bytes()).hexdigest())
