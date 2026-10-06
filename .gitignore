@@ -25,6 +25,9 @@ Thumbs.db
 
 # Secrets / keys
 *.pem
+# Public keys embedded in the Windows release (never private keys).
+!deployment/windows/keys/license-public.pem
+!deployment/windows/keys/update-public.pem
 *.key
 *.p12
 *.pfx
