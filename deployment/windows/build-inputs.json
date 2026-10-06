@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "comment": "Pinned third-party inputs for the Windows appliance release. Every file is used only after its SHA-256 and size match. Versions were identified by matching the binaries shipped in v0.1.0-windows-prototype / pilot RC2.",
+  "engine": {
+    "repository_ref": "engine/windows-prototype",
+    "commit": "85425f23ff1b497ddd2381937c29fec2e60c2fd7",
+    "target": "work/multiotp-engine"
+  },
+  "inputs": [
+    {
+      "name": "python-embed",
+      "version": "3.12.10",
+      "urls": ["https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip"],
+      "sha256": "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3",
+      "size": 11133606,
+      "target": "inputs/python-embed.zip"
+    },
+    {
+      "name": "node",
+      "version": "24.19.0",
+      "urls": ["https://nodejs.org/dist/v24.19.0/win-x64/node.exe"],
+      "sha256": "3602f2bb1a10f2cbab4c36886218a33c1ab3db87290e73b033c46c77147d0237",
+      "size": 92825416,
+      "target": "node/node.exe"
+    },
+    {
+      "name": "node-license",
+      "version": "24.19.0",
+      "urls": ["https://raw.githubusercontent.com/nodejs/node/v24.19.0/LICENSE"],
+      "sha256": "148eacf7863ef4329224a29398623077200a27194aa075569faf4a0a85566ca5",
+      "size": 157606,
+      "target": "inputs/NODE-LICENSE"
+    },
+    {
+      "name": "php",
+      "version": "8.3.35-nts-Win32-vs16-x64",
+      "urls": [
+        "https://windows.php.net/downloads/releases/php-8.3.35-nts-Win32-vs16-x64.zip",
+        "https://windows.php.net/downloads/releases/archives/php-8.3.35-nts-Win32-vs16-x64.zip"
+      ],
+      "sha256": "25a8e2ac9ff30f1d768d1447c09a600617fa6e6082729f6e95f008b59c91fe45",
+      "size": 33873909,
+      "unzip_to": "work/php-runtime"
+    },
+    {
+      "name": "winsw",
+      "version": "2.12.0",
+      "urls": ["https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe"],
+      "sha256": "05b82d46ad331cc16bdc00de5c6332c1ef818df8ceefcd49c726553209b3a0da",
+      "size": 18243033,
+      "target": "inputs/WinSW-x64.exe"
+    },
+    {
+      "name": "winsw-license",
+      "version": "2.12.0",
+      "urls": ["https://raw.githubusercontent.com/winsw/winsw/v2.12.0/LICENSE.txt"],
+      "sha256": "1cdf703c10a70e5973bf3acf2a5eeabe7746237155b92db2034aeae26fdf7802",
+      "size": 1158,
+      "target": "inputs/WINSW-LICENSE"
+    },
+    {
+      "name": "vc-redist",
+      "version": "Visual C++ 2015-2022 x64 (content-addressed Microsoft URL)",
+      "urls": ["https://download.visualstudio.microsoft.com/download/pr/bd1c8d9d-ba95-4eee-bc6e-df1fcc876373/CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B/VC_redist.x64.exe"],
+      "sha256": "cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b",
+      "size": 25635768,
+      "target": "inputs/vc_redist.x64.exe"
+    },
+    {
+      "name": "provider",
+      "version": "multiOTP Credential Provider 5.10.2.2 (stock SysCo release)",
+      "urls": ["https://github.com/multiOTP/multiOTPCredentialProvider/releases/download/5.10.2.2/multiOTPCredentialProvider-5.10.2.2.zip"],
+      "sha256": "0c62efbf0f3f10bdb9d4e9adc6fdffeccc42d5475ae8ea287833afc0846a1442",
+      "size": 17363706,
+      "extract_member": {
+        "name": "multiOTPCredentialProviderInstaller.msi",
+        "sha256": "21fe0897c0056cfadd9fc741affb77c0cc7c87c86022a51a7cb9f7ab1c65cbd5",
+        "target": "inputs/provider/multiOTPCredentialProviderInstaller.msi"
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+# Runtime dependencies embedded in the Windows appliance (embedded CPython 3.12, win_amd64).
+# Union of apps/appliance-api, services/license-agent and services/multiotp-adapter, plus
+# pyotp for the packaged verify-native-cgi.py diagnostic. Plain uvicorn: the runtime always
+# runs --http h11 --loop asyncio, so the [standard] extras are never used.
+# Regenerate the lock with scripts/fetch-build-inputs.py --lock (see deployment/windows/README.md).
+fastapi>=0.116,<1
+uvicorn>=0.35,<1
+sqlalchemy>=2.0,<3
+pydantic-settings>=2.10,<3
+email-validator>=2.2,<3
+httpx>=0.28,<1
+PyJWT>=2.10,<3
+argon2-cffi>=25,<26
+apscheduler>=3.11,<4
+cryptography>=45,<47
+pyotp>=2.9,<3
