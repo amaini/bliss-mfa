@@ -44,7 +44,7 @@ def initialize(engine_path, license_url, public_key_file):
 def processes(repo, engine_config, state_parent, python):
     path = state_parent / 'appliance.json'
     if not path.exists():
-        return [], []
+        return []
     config = json.loads(path.read_text(encoding='utf-8-sig'))
     work = repo.parent
     node = work / 'node/node.exe'
@@ -67,14 +67,16 @@ def processes(repo, engine_config, state_parent, python):
         BLISS_PORTAL_TLS_PORT=str(config['tls_port']), BLISS_PORTAL_HTTP_PORT=str(config['portal_port']))
     def uvicorn(app, port):
         return [python, '-m', 'uvicorn', app, '--host', '127.0.0.1', '--port', str(port), '--no-access-log']
-    commands = [
-        ('license-agent', uvicorn('license_agent.main:app', config['agent_port']), agent_env),
-        ('appliance-api', uvicorn('appliance.main:app', config['api_port']), api_env),
-        ('portal', [str(node), str(portal)], portal_env),
+    # (name, command, environment, health check, TLS verification). These management
+    # components are supervised separately from, and can never stop, authentication.
+    return [
+        ('license-agent', uvicorn('license_agent.main:app', config['agent_port']), agent_env,
+            (f"http://127.0.0.1:{config['agent_port']}/health", {'Authorization': 'Bearer ' + config['agent_token']}), True),
+        ('appliance-api', uvicorn('appliance.main:app', config['api_port']), api_env,
+            (f"http://127.0.0.1:{config['api_port']}/health", {}), True),
+        ('portal', [str(node), str(portal)], portal_env,
+            (f"http://127.0.0.1:{config['portal_port']}/setup", {}), True),
         ('portal-tls', [*uvicorn('adapter.portal_proxy:app', config['tls_port']),
-            '--ssl-certfile', engine_config['certificate_file'], '--ssl-keyfile', engine_config['certificate_key_file']], proxy_env),
+            '--ssl-certfile', engine_config['certificate_file'], '--ssl-keyfile', engine_config['certificate_key_file']], proxy_env,
+            (f"https://localhost:{config['tls_port']}/setup", {}), engine_config['certificate_file']),
     ]
-    checks = [(f"http://127.0.0.1:{config['agent_port']}/health", {'Authorization': 'Bearer ' + config['agent_token']}),
-              (f"http://127.0.0.1:{config['api_port']}/health", {}),
-              (f"https://localhost:{config['tls_port']}/setup", {})]
-    return commands, checks

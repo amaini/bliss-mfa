@@ -95,7 +95,7 @@ with zipfile.ZipFile(OUTPUT, 'x', compression=zipfile.ZIP_DEFLATED) as archive:
             for name in package.namelist():
                 if not name.endswith('/'):
                     add(archive, 'python/Lib/site-packages/' + name, package.read(name))
-    sources = ['scripts/run-engine.py', 'deployment/engine-auth/router.php',
+    sources = ['scripts/run-engine.py', 'scripts/engine_supervisor.py', 'deployment/engine-auth/router.php',
                      'scripts/Install-EngineService.ps1', 'scripts/engine-backup.py',
                      'scripts/appliance-runtime.py', 'scripts/Install-BlissEngine.ps1',
                      'scripts/Patch-ProviderHttpFraming.ps1', 'scripts/verify-native-cgi.py',

@@ -37,7 +37,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install pytest cryptography httpx ruff
-      - run: ruff check --select E4,E7,E9,F scripts/client-update.py scripts/publish-client-update.py scripts/build-vm-package.py scripts/generate-update-keys.py scripts/tests
+      - run: ruff check --select E4,E7,E9,F scripts/client-update.py scripts/publish-client-update.py scripts/build-vm-package.py scripts/generate-update-keys.py scripts/engine_supervisor.py scripts/run-engine.py scripts/appliance-runtime.py scripts/tests
       - run: pytest -q scripts/tests
 
   multiotp-adapter:
