@@ -30,3 +30,8 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.setuptools.packages.find]
+# Only the application package: alembic/ holds migration scripts and must not
+# be installed as a top-level package that shadows the alembic library.
+include = ["app*"]
