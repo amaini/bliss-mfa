@@ -92,3 +92,22 @@ def test_production_build_rejects_an_unexpected_update_key(tmp_path, fetched):
     result = build(tmp_path, fetched, '--update-public-key', str(other))
     assert result.returncode != 0
     assert 'pinned' in (result.stdout + result.stderr).lower()
+
+
+def test_library_source_mentioning_key_headers_is_not_mistaken_for_a_key(tmp_path, fetched):
+    root, _, _ = fetched
+    with zipfile.ZipFile(root / 'inputs/appliance-wheels/fixture-1.0-py3-none-any.whl', 'a') as wheel:
+        wheel.writestr('fixture/ssh.py', b'_PEM = b"-----BEGIN OPENSSH PRIVATE KEY-----"\n')
+    result = build(tmp_path, fetched, '--test-update-key')
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_a_real_private_key_in_any_input_fails_the_build(tmp_path, fetched):
+    root, _, _ = fetched
+    leaked = Ed25519PrivateKey.generate().private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+    with zipfile.ZipFile(root / 'inputs/appliance-wheels/fixture-1.0-py3-none-any.whl', 'a') as wheel:
+        wheel.writestr('fixture/leaked.txt', leaked)
+    result = build(tmp_path, fetched, '--test-update-key')
+    assert result.returncode != 0
+    assert 'private' in (result.stdout + result.stderr).lower()

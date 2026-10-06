@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -29,6 +30,11 @@ KEYS = REPO / 'deployment/windows/keys'
 PINNED_UPDATE_KEY_SHA256 = '6d37a5b11ad0bb606d2c65ed10c98ea437b8e9503937a6a9382ce001ad153d42'
 TEST_UPDATE_URL = 'https://license.blissitek.ca/updates/test/bliss-mfa-update-{version}-TEST.zip'
 UPDATE_URL = 'https://license.blissitek.ca/updates/bliss-mfa-update-{version}.zip'
+
+
+# An actual PEM private key block (header followed by base64 key data), not a header literal
+# such as the one in the cryptography library's ssh.py.
+PRIVATE_KEY_BLOCK = re.compile(rb'-----BEGIN [A-Z ]*PRIVATE KEY-----\r?\n[A-Za-z0-9+/=\r\n]{40,}')
 
 
 class ReleaseError(RuntimeError):
@@ -97,7 +103,7 @@ def verify_customer_artifacts(appliance, installer):
             data = archive.read(name)
             if hashlib.sha256(data).hexdigest() != expected:
                 raise ReleaseError('Appliance file hash mismatch: ' + name)
-            if b'PRIVATE KEY-----' in data or '.local/' in name:
+            if PRIVATE_KEY_BLOCK.search(data) or '.local/' in name:
                 raise ReleaseError('Private material in appliance: ' + name)
     appliance_hash = sha256(appliance)
     with zipfile.ZipFile(installer) as archive:
@@ -107,7 +113,7 @@ def verify_customer_artifacts(appliance, installer):
         if appliance_hash.encode() not in archive.read('Setup-BlissMFA.ps1'):
             raise ReleaseError('Installer setup does not pin the appliance SHA-256')
         for name in archive.namelist():
-            if name != 'BlissMFA-Appliance.zip' and b'PRIVATE KEY-----' in archive.read(name):
+            if name != 'BlissMFA-Appliance.zip' and PRIVATE_KEY_BLOCK.search(archive.read(name)):
                 raise ReleaseError('Private material in installer: ' + name)
     return {'appliance_files': len(manifest), 'installer_pins_appliance_sha256': True}
 
