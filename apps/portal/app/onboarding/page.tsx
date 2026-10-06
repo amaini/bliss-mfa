@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 type SignupStatus = {
@@ -10,7 +10,7 @@ type SignupStatus = {
   plan_code: string;
 };
 
-export default function OnboardingPage() {
+function Onboarding() {
   const params = useSearchParams();
   const token = params.get("token") ?? "";
   const api = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -107,5 +107,14 @@ export default function OnboardingPage() {
         {result ? <p className="successMessage">{result}</p> : null}
       </div>
     </main>
+  );
+}
+
+// useSearchParams() needs a Suspense boundary for static prerendering.
+export default function OnboardingPage() {
+  return (
+    <Suspense fallback={null}>
+      <Onboarding />
+    </Suspense>
   );
 }
