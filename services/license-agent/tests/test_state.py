@@ -168,6 +168,7 @@ def test_offline_release_code_can_be_recovered(tmp_path, monkeypatch):
     get_settings.cache_clear()
 
     state = LicenseState(str(tmp_path))
+    state.public_key_b64()  # real offline activation creates the device key first
     now = datetime.now(UTC)
     payload = {
         "v": 1,

@@ -36,6 +36,13 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+ACTIVATION_EVIDENCE = ("lease.token", "trusted-time.json", "released.json")
+
+
+class IdentityLostError(RuntimeError):
+    """An activated appliance lost its identity; a replacement must never be minted silently."""
+
+
 class LicenseState:
     def __init__(self, state_dir: str | None = None) -> None:
         self.root = Path(state_dir or get_settings().state_dir)
@@ -69,7 +76,18 @@ class LicenseState:
     def seat_state_path(self) -> Path:
         return self.root / "rdp-seats.json"
 
+    def _activated(self) -> bool:
+        return any((self.root / name).exists() for name in ACTIVATION_EVIDENCE)
+
+    def _guard_installation_id(self) -> None:
+        if not self.installation_path.exists() and (self._activated() or self.private_key_path.exists()):
+            raise IdentityLostError(
+                "Appliance identity is missing for an activated installation; restore the "
+                "license-state backup or ask Bliss support to release the license"
+            )
+
     def installation_id(self) -> str:
+        self._guard_installation_id()
         if self.installation_path.exists():
             return json.loads(self.installation_path.read_text())["installation_id"]
 
@@ -78,10 +96,18 @@ class LicenseState:
         return installation_id
 
     def device_key(self) -> Ed25519PrivateKey:
+        self._guard_installation_id()
+        if not self.private_key_path.exists() and self._activated():
+            raise IdentityLostError(
+                "Device key is missing for an activated installation; restore the "
+                "license-state backup or ask Bliss support to release the license"
+            )
         if self.private_key_path.exists():
             raw = b64url_decode(self.private_key_path.read_text().strip())
             return Ed25519PrivateKey.from_private_bytes(raw)
 
+        # The identity is always minted as a pair: installation ID first, then its key.
+        self.installation_id()
         key = Ed25519PrivateKey.generate()
         raw = key.private_bytes(
             encoding=serialization.Encoding.Raw,
@@ -200,6 +226,15 @@ class LicenseState:
         return payload
 
     def effective_status(self) -> dict[str, Any]:
+        try:
+            self._guard_installation_id()
+        except IdentityLostError:
+            return {
+                "state": "identity_lost",
+                "max_rdp_users": 0,
+                "license_type": None,
+                "license_id": None,
+            }
         token = self.load_lease()
         if not token:
             return {
