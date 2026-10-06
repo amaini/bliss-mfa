@@ -119,7 +119,8 @@ with zipfile.ZipFile(OUTPUT, 'x', compression=zipfile.ZIP_DEFLATED) as archive:
     tree(archive, REPO / 'services/multiotp-adapter/adapter', 'bliss-mfa/services/multiotp-adapter/adapter')
     if args.appliance:
         add(archive, 'bliss-mfa/deployment/release-version.json', json.dumps({'version': args.version}).encode())
-        for name in ('Install-WindowsIntegration.ps1', 'Uninstall-BlissMFA.ps1', 'Update-BlissMFA.ps1', 'client-update.py'):
+        for name in ('Install-WindowsIntegration.ps1', 'Uninstall-BlissMFA.ps1', 'Update-BlissMFA.ps1', 'client-update.py',
+                     'Merge-ReinstallFiles.ps1'):
             add(archive, 'bliss-mfa/scripts/' + name, (REPO / 'scripts' / name).read_bytes())
         add(archive, 'bliss-mfa/deployment/update-public.pem', update_public_key.read_bytes())
         tree(archive, REPO / 'apps/appliance-api/appliance', 'bliss-mfa/apps/appliance-api/appliance')

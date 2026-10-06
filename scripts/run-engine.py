@@ -145,9 +145,22 @@ if __name__ == "__main__":
     parser.add_argument("--initialize-appliance", action="store_true")
     parser.add_argument("--license-url")
     parser.add_argument("--public-key", type=Path)
+    parser.add_argument("--inspect-retained", action="store_true",
+                        help="Classify retained data for a reinstall; exit 3 if the identity is lost")
+    parser.add_argument("--engine-only", action="store_true")
     args = parser.parse_args()
     stop_file = args.config.resolve().with_suffix(".stop")
-    if args.stop:
+    if args.inspect_retained:
+        runtime = appliance_runtime()
+        try:
+            print(json.dumps(runtime.inspect_retained(args.config.resolve().parent, not args.engine_only)))
+        except runtime.IdentityLost as error:
+            print(error, file=sys.stderr)
+            raise SystemExit(3) from None
+        except runtime.RetainedStateError as error:
+            print(error, file=sys.stderr)
+            raise SystemExit(2) from None
+    elif args.stop:
         stop_file.touch()
     elif args.initialize_appliance:
         if not args.license_url or not args.public_key:

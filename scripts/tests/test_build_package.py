@@ -57,6 +57,8 @@ def test_package_from_separate_checkout_preserves_existing_release(packaging):
         assert "bliss-mfa/deployment/update-public.pem" in names
         # run-engine.py imports the isolating supervisor; a release without it cannot start.
         assert "bliss-mfa/scripts/engine_supervisor.py" in names
+        # The reinstall path runs this step from the verified release.
+        assert "bliss-mfa/scripts/Merge-ReinstallFiles.ps1" in names
         assert not any(".local/" in name or "private.pem" in name for name in names)
         manifest = json.loads(archive.read("manifest.json"))
         assert set(manifest) == set(names) - {"manifest.json"}

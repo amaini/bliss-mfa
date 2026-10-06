@@ -41,6 +41,51 @@ def initialize(engine_path, license_url, public_key_file):
     print('Private appliance configuration created')
 
 
+RECOVERY_DOC = 'docs/reinstall-and-identity-recovery.md'
+IDENTITY_FILES = ('installation.json', 'device.key')
+ACTIVATION_EVIDENCE = ('lease.token', 'trusted-time.json', 'released.json')
+
+
+class RetainedStateError(ValueError):
+    pass
+
+
+class IdentityLost(RetainedStateError):
+    pass
+
+
+def inspect_retained(private, appliance=True):
+    """Classify retained data before a reinstall. Never creates or repairs an identity."""
+    private = Path(private)
+    config_path = private / 'config.json'
+    if not config_path.exists():
+        if private.exists() and any(private.iterdir()):
+            raise RetainedStateError('Retained data exists but its engine configuration is missing; '
+                                     'restore it from backup. See ' + RECOVERY_DOC)
+        return {'mode': 'fresh'}
+    config = json.loads(config_path.read_text(encoding='utf-8-sig'))
+    for key in ('certificate_file', 'certificate_key_file'):
+        if not Path(config[key]).is_file():
+            raise RetainedStateError('Retained engine certificate is missing; restore it from backup. See ' + RECOVERY_DOC)
+    result = {'mode': 'retained', 'installation_id': None, 'activated': False}
+    appliance_path = private / 'appliance.json'
+    if not appliance_path.exists():
+        if appliance:
+            raise RetainedStateError('Retained appliance configuration is missing; restore it from backup. See '
+                                     + RECOVERY_DOC)
+        return result
+    license_state = Path(json.loads(appliance_path.read_text(encoding='utf-8-sig'))['license_state_dir'])
+    present = [name for name in IDENTITY_FILES if (license_state / name).is_file()]
+    result['activated'] = any((license_state / name).exists() for name in ACTIVATION_EVIDENCE)
+    if (result['activated'] and len(present) < 2) or present == ['device.key']:
+        raise IdentityLost('The retained appliance identity is incomplete or missing although this appliance '
+                           'was activated. Reinstalling will not create a replacement identity. Restore the '
+                           'license-state backup, or follow ' + RECOVERY_DOC + ' to have Bliss release the license.')
+    if present:
+        result['installation_id'] = json.loads((license_state / 'installation.json').read_text())['installation_id']
+    return result
+
+
 def processes(repo, engine_config, state_parent, python):
     path = state_parent / 'appliance.json'
     if not path.exists():
