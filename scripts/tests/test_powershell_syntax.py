@@ -33,3 +33,11 @@ def test_installed_version_comes_from_the_release_not_a_leftover_installation_re
     leftover = text.index("Test-Path -LiteralPath $existing")
     assert 'elseif (Test-Path -LiteralPath $existing)' in text
     assert release < leftover
+
+
+def test_provider_staging_uses_a_fresh_backup_directory_per_installation():
+    # Uninstall keeps C:\BlissMFA\provider-backup. Reusing it made the framing patch's
+    # one-shot recovery guard abort every reinstall (found on the test VM, 0.1.2 -> 0.1.3).
+    text = (Path(__file__).parents[1] / 'Stage-BlissProvider.ps1').read_text()
+    assert "$backup=Join-Path $Root 'provider-backup'\n" not in text.replace('\r\n', '\n')
+    assert r"Join-Path $Root ('provider-backup\'+(Get-Date -Format 'yyyyMMdd-HHmmss'))" in text

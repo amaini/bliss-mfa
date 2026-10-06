@@ -18,7 +18,9 @@ if ($install.ExitCode -notin @(0,3010)) { throw 'Provider installation failed.' 
 $config=Get-Content (Join-Path $Root 'bliss-mfa\.local\engine\config.json') -Raw | ConvertFrom-Json
 $provider=Get-ItemProperty $key
 $providerRoot=$provider.multiOTPPath.TrimEnd('\')
-$backup=Join-Path $Root 'provider-backup'
+# Stage only runs on a freshly installed stock provider: keep each installation's recovery
+# points separate so files retained from an earlier install never block a reinstall.
+$backup=Join-Path $Root ('provider-backup\'+(Get-Date -Format 'yyyyMMdd-HHmmss'))
 New-Item -ItemType Directory -Path $backup -Force | Out-Null
 $script=Join-Path $providerRoot 'php\multiotp.windows.php'
 $ini=Join-Path $providerRoot 'php\php.ini'
