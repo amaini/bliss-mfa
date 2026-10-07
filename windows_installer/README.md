@@ -6,6 +6,8 @@ This package installs the Windows appliance, can repair its installed release, a
 
 Extract the complete ZIP. Run `Setup-BlissMFA.cmd` and approve Windows elevation. The default installation directory is `C:\BlissMFA`. Setup installs the engine service and the upstream credential provider with enforcement disabled, imports the private localhost certificate, and creates portal/update/repair shortcuts. Automatic update checks run as SYSTEM every six hours, beginning ten minutes after installation. Backend failures leave the installed version running.
 
+If setup fails, preserve the error and run setup again. A complete matching updater is verified and reused; interrupted updater copying leaves a staging folder rather than blocking the next attempt. A managed installation receipt automatically selects repair, even if the first attempt never created a Repair shortcut. Existing unmanaged prototype state is preserved and requires a separate migration or diagnosis.
+
 To choose a different directory or disable automatic updates:
 
 ```powershell
