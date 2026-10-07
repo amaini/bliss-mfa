@@ -87,9 +87,15 @@ class LicenseServerClient:
 
     def billing_portal(self) -> str:
         with self._client() as client:
+            installation_id = self.state.installation_id()
+            challenge = client.post("/v1/challenges", json={"installation_id": installation_id})
+            challenge.raise_for_status()
+            message = {"installation_id": installation_id,
+                       "nonce": challenge.json()["nonce"], "action": "billing"}
             response = client.post(
                 "/v1/billing/portal",
-                json={"installation_id": self.state.installation_id()},
+                json={"installation_id": installation_id, "nonce": message["nonce"],
+                      "signature": self.state.sign(message)},
             )
             response.raise_for_status()
             return str(response.json()["url"])

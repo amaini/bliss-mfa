@@ -36,3 +36,6 @@ tmp/
 # Local appliance/dev state
 .local/
 *.db
+
+# Public licensing trust anchor used by the Windows release build
+!deployment/license-public.pem

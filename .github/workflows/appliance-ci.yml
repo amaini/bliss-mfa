@@ -7,6 +7,8 @@ on:
       - "apps/appliance-portal/**"
       - "tools/check_portal_origins.py"
       - "apps/license-server/**"
+      - "windows_installer/**"
+      - "scripts/**"
       - "services/license-agent/**"
       - "services/multiotp-mock/**"
       - "services/multiotp-adapter/**"
@@ -18,6 +20,8 @@ on:
       - "apps/appliance-portal/**"
       - "tools/check_portal_origins.py"
       - "apps/license-server/**"
+      - "windows_installer/**"
+      - "scripts/**"
       - "services/license-agent/**"
       - "services/multiotp-mock/**"
       - "services/multiotp-adapter/**"
@@ -103,3 +107,29 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install "httpx>=0.28,<1"
       - run: python ../../tools/check_portal_origins.py --portal . --output ../../outputs/portal-origin-results.json
+
+  installer-transactions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e "apps/license-server[dev]" httpx
+      - run: ruff check --select E4,E7,E9,F windows_installer scripts
+      - run: pytest windows_installer/tests -q
+
+  windows-script-syntax:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse installer and Windows runtime scripts without executing them
+        shell: powershell
+        run: |
+          $failures=@()
+          Get-ChildItem windows_installer,scripts -Filter *.ps1 | ForEach-Object {
+            $tokens=$null; $syntaxErrors=$null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName,[ref]$tokens,[ref]$syntaxErrors) | Out-Null
+            $failures+=$syntaxErrors
+          }
+          if ($failures.Count) { $failures | Format-List; exit 1 }

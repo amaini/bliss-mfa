@@ -6,13 +6,22 @@ import httpx
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import Depends, FastAPI, HTTPException, Request
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .audit import write_audit
 from .clients import AdapterOperationError, LicenseAgentClient, MultiOtpClient
 from .config import get_settings
 from .db import Base, SessionLocal, engine, get_db
-from .models import AdminRole, AuditEvent, LocalAdmin, MfaUser, UserStatus, event_digest
+from .models import (
+    AdminRole,
+    AuditEvent,
+    BootstrapSeal,
+    LocalAdmin,
+    MfaUser,
+    UserStatus,
+    event_digest,
+)
 from .schemas import (
     AdminCreate,
     AdminRead,
@@ -43,6 +52,53 @@ from .security import (
 settings = get_settings()
 scheduler = BackgroundScheduler(daemon=True)
 app = FastAPI(title="Bliss Secure MFA Appliance API", version="0.1.0")
+
+
+@app.get('/v1/onboarding')
+def onboarding_status(
+    _: Principal = Depends(current_principal), db: Session = Depends(get_db),
+) -> dict:
+    users = list(db.scalars(select(MfaUser).where(MfaUser.protected_rdp.is_(True))))
+    active = [user for user in users if user.status == UserStatus.active]
+    try:
+        license = license_agent().status()
+        licensed = license.get('state') in {'active', 'offline_grace'}
+    except (httpx.HTTPError, RuntimeError):
+        licensed = False
+    confirmed = set(db.scalars(select(AuditEvent.subject_id).where(
+        AuditEvent.action == 'onboarding.rdp.confirmed', AuditEvent.success.is_(True))))
+    rdp_confirmed = any(user.id in confirmed for user in active)
+    steps = [
+        {'id': 'owner', 'title': 'Create your local administrator', 'complete': True, 'href': '/administrators'},
+        {'id': 'license', 'title': 'Activate your paid license', 'complete': licensed, 'href': '/license'},
+        {'id': 'user', 'title': 'Add your first Windows account', 'complete': bool(users), 'href': '/users'},
+        {'id': 'authenticator', 'title': 'Enroll and verify an authenticator', 'complete': bool(active), 'href': '/users'},
+        {'id': 'rdp', 'title': 'Test protected RDP access', 'complete': rdp_confirmed, 'href': '/onboarding'},
+    ]
+    return {'steps': steps, 'complete': all(step['complete'] for step in steps),
+            'active_users': [{'id': user.id, 'username': user.username} for user in active]}
+
+
+@app.post('/v1/onboarding/rdp/{user_id}')
+def confirm_rdp_onboarding(
+    user_id: str, request: Request, principal: Principal = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> dict:
+    user = db.get(MfaUser, user_id)
+    if not user or user.status != UserStatus.active or not user.protected_rdp:
+        raise HTTPException(409, 'Enroll and verify a protected user before confirming RDP')
+    try:
+        licensed = license_agent().status().get('state') in {'active', 'offline_grace'}
+    except (httpx.HTTPError, RuntimeError):
+        raise HTTPException(503, 'License agent unavailable') from None
+    if not licensed:
+        raise HTTPException(403, 'Activate your license before confirming RDP')
+    write_audit(db, actor_id=principal.id, action='onboarding.rdp.confirmed',
+                subject_type='mfa_user', subject_id=user.id,
+                reason='Owner confirms protected RDP sign-in and incorrect OTP rejection',
+                source_ip=request.client.host if request.client else None)
+    db.commit()
+    return {'confirmed': True}
 
 
 @app.on_event("startup")
@@ -143,10 +199,18 @@ def health() -> dict[str, str]:
 
 @app.post("/v1/auth/bootstrap", response_model=TokenRead, status_code=201)
 def bootstrap(payload: BootstrapRequest, db: Session = Depends(get_db)) -> TokenRead:
-    if db.scalar(select(func.count()).select_from(LocalAdmin)):
+    if db.get(BootstrapSeal, 1) or db.scalar(select(func.count()).select_from(LocalAdmin)):
         raise HTTPException(status_code=409, detail="Appliance is already initialized")
     if not settings.setup_token or not hmac.compare_digest(payload.setup_token, settings.setup_token):
         raise HTTPException(status_code=401, detail="Invalid setup token")
+    # The unique reservation serializes simultaneous first-time setup requests.
+    # Keep the seal even if administrators are later removed through recovery.
+    db.add(BootstrapSeal(id=1))
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, 'Appliance is already initialized') from None
 
     admin = LocalAdmin(
         email=str(payload.email).lower(),
@@ -400,6 +464,8 @@ def reason_command(
         raise HTTPException(status_code=409, detail="Revoked users must be deleted and enrolled again")
     if command == "unlock" and user.status in {UserStatus.disabled, UserStatus.pending}:
         raise HTTPException(status_code=409, detail="Only enrolled, enabled users may be unlocked")
+    if command == "lock" and user.status not in {UserStatus.active, UserStatus.locked}:
+        raise HTTPException(status_code=409, detail="Only enrolled, enabled users may be locked")
     seat = None
     if requires_seat and user.protected_rdp and user.status in {UserStatus.disabled, UserStatus.revoked}:
         seat = reserve_user_seat(user.username)
@@ -489,6 +555,21 @@ def unlock_user(
     return reason_command(
         user_id=user_id, command="unlock", action="mfa.user.unlocked",
         new_status=UserStatus.active, payload=payload, request=request,
+        principal=principal, db=db,
+    )
+
+
+@app.post("/v1/users/{user_id}/lock", response_model=UserRead)
+def lock_user(
+    user_id: str,
+    payload: ReasonRequest,
+    request: Request,
+    principal: Principal = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> MfaUser:
+    return reason_command(
+        user_id=user_id, command="lock", action="mfa.user.locked",
+        new_status=UserStatus.locked, payload=payload, request=request,
         principal=principal, db=db,
     )
 
