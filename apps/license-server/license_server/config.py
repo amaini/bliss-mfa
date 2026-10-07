@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     signing_private_key_pem: str | None = None
     signing_private_key_file: str | None = None
 
+    update_signing_private_key_file: str | None = None
+
     online_lease_days: int = 14
     online_grace_days: int = 30
     offline_default_days: int = 365

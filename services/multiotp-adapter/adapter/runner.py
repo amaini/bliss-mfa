@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+from pathlib import Path
 from dataclasses import dataclass
 
 from .config import get_settings
@@ -48,8 +49,18 @@ class MultiOtpCliRunner:
         self.timeout = settings.command_timeout_seconds
 
     def run(self, *arguments: str) -> CommandResult:
+        settings = get_settings()
+        prefix = [self.executable]
+        if settings.multiotp_php_executable:
+            prefix = [settings.multiotp_php_executable]
+            if settings.multiotp_php_extension_dir:
+                prefix += ["-n", "-d", "extension_dir=" + settings.multiotp_php_extension_dir,
+                           "-d", "extension=mbstring", "-d", "extension=openssl"]
+            prefix.append(self.executable)
+        if settings.multiotp_base_dir:
+            prefix.append("-base-dir=" + Path(settings.multiotp_base_dir).resolve().as_posix() + "/")
         process = subprocess.run(
-            [self.executable, *arguments],
+            [*prefix, *arguments],
             shell=False,
             capture_output=True,
             text=True,
@@ -79,6 +90,9 @@ class MultiOtpCliRunner:
 
     def unlock(self, username: str) -> CommandResult:
         return self.run("-unlock", validate_username(username))
+
+    def lock(self, username: str) -> CommandResult:
+        return self.run("-lock", validate_username(username))
 
     def disable(self, username: str) -> CommandResult:
         return self.run("-deactivate", validate_username(username))

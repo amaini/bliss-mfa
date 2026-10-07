@@ -34,9 +34,11 @@ from .schemas import (
     StripeLinkRequest,
 )
 from .security import require_admin
+from .updates import router as updates_router
 
 settings = get_settings()
 app = FastAPI(title="Bliss Secure MFA License Server", version="0.1.0")
+app.include_router(updates_router)
 
 
 @app.on_event("startup")

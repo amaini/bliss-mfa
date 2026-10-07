@@ -5,7 +5,10 @@ import hashlib
 import json
 import os
 import platform
+import sqlite3
+import tempfile
 import uuid
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -185,7 +188,6 @@ class LicenseState:
         signature = b64url_decode(outer["signature"])
         key = serialization.load_pem_public_key(pem.encode())
         if not isinstance(key, Ed25519PublicKey):
-            # The API reports configuration failures as RuntimeError.
             raise RuntimeError("Bliss signing public key must be Ed25519")  # noqa: TRY004
         try:
             key.verify(signature, payload_bytes)
@@ -223,8 +225,9 @@ class LicenseState:
         grace_raw = payload.get("grace_expires_at")
         grace_expires = parse_time(grace_raw) if grace_raw else None
 
-        if state == "revoked":
-            effective = "revoked"
+        if state != "active":
+            # Expiration must never turn a suspended/revoked entitlement into grace access.
+            effective = state
         elif now <= lease_expires:
             effective = state
         elif grace_expires and now <= grace_expires:
@@ -244,13 +247,31 @@ class LicenseState:
         return hashlib.sha256(normalized.encode()).hexdigest()
 
     def seat_ids(self) -> set[str]:
-        if not self.seat_state_path.exists():
-            return set()
+        with self.seat_transaction() as connection:
+            return {row[0] for row in connection.execute("SELECT id FROM seats")}
+
+    @contextmanager
+    def seat_transaction(self):
+        connection = sqlite3.connect(self.root / "rdp-seats.sqlite3", timeout=15)
         try:
-            data = json.loads(self.seat_state_path.read_text())
-            return {str(value) for value in data.get("seats", [])}
-        except (ValueError, json.JSONDecodeError):
-            return set()
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute("CREATE TABLE IF NOT EXISTS seats (id TEXT PRIMARY KEY)")
+            connection.execute("CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY)")
+            if not connection.execute("SELECT 1 FROM metadata WHERE key='imported'").fetchone():
+                if self.seat_state_path.exists():
+                    data = json.loads(self.seat_state_path.read_text())
+                    seats = data["seats"]
+                    if not isinstance(seats, list) or any(not isinstance(s, str) or len(s) != 64 for s in seats):
+                        raise ValueError("Invalid legacy seat state; restore a verified backup")
+                    connection.executemany("INSERT OR IGNORE INTO seats(id) VALUES (?)", [(s,) for s in seats])
+                connection.execute("INSERT INTO metadata(key) VALUES ('imported')")
+            yield connection
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
 
     def seat_count(self) -> int:
         return len(self.seat_ids())
@@ -259,25 +280,27 @@ class LicenseState:
         return self.seat_id(username) in self.seat_ids()
 
     def reserve_seat(self, username: str) -> dict[str, Any]:
+        with self.seat_transaction() as connection:
+            return self._reserve_seat(connection, username)
+
+    def _reserve_seat(self, connection, username: str) -> dict[str, Any]:
         license = self.effective_status()
         state = str(license.get("state", "unlicensed"))
         maximum = int(license.get("max_rdp_users") or 0)
-        seats = self.seat_ids()
+        seats = {row[0] for row in connection.execute("SELECT id FROM seats")}
         seat = self.seat_id(username)
 
+        if state not in {"active", "offline_grace"}:
+            return {
+                "allowed": False, "seat_count": len(seats), "max_rdp_users": maximum,
+                "reason": f"License state {state} does not allow a new RDP seat",
+            }
         if seat in seats:
             return {
                 "allowed": True,
                 "seat_count": len(seats),
                 "max_rdp_users": maximum,
                 "already_reserved": True,
-            }
-        if state not in {"active", "offline_grace"}:
-            return {
-                "allowed": False,
-                "seat_count": len(seats),
-                "max_rdp_users": maximum,
-                "reason": f"License state {state} does not allow a new RDP seat",
             }
         if len(seats) >= maximum:
             return {
@@ -288,7 +311,7 @@ class LicenseState:
             }
 
         seats.add(seat)
-        self._atomic_json(self.seat_state_path, {"seats": sorted(seats)})
+        connection.execute("INSERT INTO seats(id) VALUES (?)", (seat,))
         return {
             "allowed": True,
             "seat_count": len(seats),
@@ -297,10 +320,9 @@ class LicenseState:
         }
 
     def release_seat(self, username: str) -> int:
-        seats = self.seat_ids()
-        seats.discard(self.seat_id(username))
-        self._atomic_json(self.seat_state_path, {"seats": sorted(seats)})
-        return len(seats)
+        with self.seat_transaction() as connection:
+            connection.execute("DELETE FROM seats WHERE id=?", (self.seat_id(username),))
+            return connection.execute("SELECT COUNT(*) FROM seats").fetchone()[0]
 
     def update_trusted_time(self, server_time: datetime) -> None:
         current = self._read_trusted_time()
@@ -324,9 +346,15 @@ class LicenseState:
             return None
 
     def _atomic_text(self, path: Path, value: str) -> None:
-        temp = path.with_suffix(path.suffix + ".tmp")
-        temp.write_text(value)
-        os.replace(temp, path)
+        handle, filename = tempfile.mkstemp(dir=self.root, prefix=path.name + ".", suffix=".tmp")
+        try:
+            with os.fdopen(handle, "w", encoding="utf-8") as stream:
+                stream.write(value)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(filename, path)
+        finally:
+            Path(filename).unlink(missing_ok=True)
 
     def _atomic_json(self, path: Path, value: dict[str, Any]) -> None:
         self._atomic_text(path, json.dumps(value, separators=(",", ":")))

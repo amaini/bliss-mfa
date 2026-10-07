@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     command_timeout_seconds: float = 15.0
     adapter_shared_token: str | None = None
     adapter_enable_writes: bool = False
+    multiotp_php_executable: str | None = None
+    multiotp_php_extension_dir: str | None = None
+    multiotp_base_dir: str | None = None
 
 
 @lru_cache

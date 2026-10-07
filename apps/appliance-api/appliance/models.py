@@ -6,7 +6,7 @@ import json
 import secrets
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base
@@ -44,6 +44,12 @@ class LocalAdmin(Base):
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     role: Mapped[AdminRole] = mapped_column(Enum(AdminRole), default=AdminRole.readonly)
     disabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class BootstrapSeal(Base):
+    __tablename__ = 'bootstrap_seal'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
