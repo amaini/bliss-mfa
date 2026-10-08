@@ -78,9 +78,13 @@ def test_windows_account_discovery_is_read_only_and_marks_enrolled_accounts(kit,
         ]), ''))
     result = client.get('/v1/windows-users')
     assert result.status_code == 200
+    user_id = db.query(MfaUser).one().id
+    # A pending record is reported as "pending", never as enrolled (QR enrollment not verified).
     assert result.json() == [
-        {'username': 'jsmith', 'display_name': 'John Smith', 'enabled': True, 'enrolled': True},
-        {'username': 'disabled', 'display_name': None, 'enabled': False, 'enrolled': False},
+        {'username': 'jsmith', 'display_name': 'John Smith', 'enabled': True,
+         'mfa_user_id': user_id, 'mfa_status': 'pending', 'state': 'pending'},
+        {'username': 'disabled', 'display_name': None, 'enabled': False,
+         'mfa_user_id': None, 'mfa_status': None, 'state': 'disabled_account'},
     ]
     assert len(list(db.query(MfaUser))) == 1
 

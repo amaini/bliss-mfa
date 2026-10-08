@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     heartbeat_interval_hours: int = 24
     # First heartbeat soon after start: appliances restarted daily must still renew their lease.
     heartbeat_startup_delay_seconds: int = 60
+    # Check new MFA usernames against local Windows accounts: "auto" on a Windows host,
+    # "required" everywhere (fails closed if accounts cannot be read), "off" for RADIUS-only.
+    windows_account_validation: str = "auto"
 
 @lru_cache
 def get_settings() -> Settings:
