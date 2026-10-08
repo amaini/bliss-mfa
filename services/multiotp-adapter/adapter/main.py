@@ -39,8 +39,9 @@ def require_writes_enabled() -> None:
 SUCCESS_CODES = {
     "create": {11}, "list": {19}, "provisioning": {17}, "verify": {0},
     "lock": {11}, "unlock": {11}, "disable": {11}, "enable": {11}, "resync": {14},
-    "revoke": {19}, "delete": {12, 21},
+    "revoke": {19}, "delete": {12, 21}, "without2fa": {11},
 }
+WITHOUT2FA, NOT_WITHOUT2FA = 8, 7  # -iswithout2fa results; anything else means no such user
 
 
 def command_response(operation: str, returncode: int, *, authentication_disabled: bool = False) -> CommandResponse:
@@ -72,10 +73,35 @@ def list_users() -> dict[str, list[str]]:
 )
 def create_user(payload: UserCreate) -> CommandResponse:
     try:
+        # Enrolling an account that signs in password-only replaces its without2FA record.
+        if runner.is_without2fa(payload.username).returncode == WITHOUT2FA:
+            removed = runner.delete_user(payload.username)
+            if removed.returncode not in SUCCESS_CODES["delete"]:
+                return command_response("delete", removed.returncode)
         result = runner.create_totp_user(payload.username)
     except AdapterInputError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return command_response("create", result.returncode)
+
+
+@app.post(
+    "/v1/users/{username}/without2fa",
+    response_model=CommandResponse,
+    dependencies=[Depends(require_internal_auth), Depends(require_writes_enabled)],
+)
+def create_without2fa(username: str) -> CommandResponse:
+    kind = runner.is_without2fa(username).returncode
+    if kind == WITHOUT2FA:
+        return CommandResponse(ok=True, returncode=kind, authentication_disabled=False)
+    if kind == NOT_WITHOUT2FA:  # an enrolled TOTP user is never downgraded here
+        return CommandResponse(ok=False, returncode=kind, authentication_disabled=False)
+    return command_response("without2fa", runner.create_without2fa_user(username).returncode)
+
+
+@app.get("/v1/users/{username}/without2fa", dependencies=[Depends(require_internal_auth)])
+def without2fa_status(username: str) -> dict[str, bool]:
+    kind = runner.is_without2fa(username).returncode
+    return {"without2fa": kind == WITHOUT2FA, "exists": kind in {WITHOUT2FA, NOT_WITHOUT2FA}}
 
 
 @app.get(

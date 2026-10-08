@@ -82,6 +82,12 @@ class MultiOtpCliRunner:
     def create_totp_user(self, username: str) -> CommandResult:
         return self.run("-fastcreatenopin", validate_username(username))
 
+    def create_without2fa_user(self, username: str) -> CommandResult:
+        return self.run("-create", validate_username(username), "without2FA", "", "", "6", "30")
+
+    def is_without2fa(self, username: str) -> CommandResult:
+        return self.run("-iswithout2fa", validate_username(username))
+
     def provisioning_url(self, username: str) -> CommandResult:
         return self.run("-urllink", validate_username(username))
 
