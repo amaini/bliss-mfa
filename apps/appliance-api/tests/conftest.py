@@ -11,3 +11,11 @@ def hermetic_windows_account_validation(monkeypatch):
     opt in explicitly and fake the account inventory.
     """
     monkeypatch.setattr(main.settings, "windows_account_validation", "off")
+
+
+@pytest.fixture(autouse=True)
+def hermetic_provider_registry(monkeypatch):
+    """Tests must never read or write the developer machine's real sign-in provider settings."""
+    from appliance.rdp_protection import ProviderRegistry
+    from tests.test_rdp_protection_registry import FakeBackend
+    monkeypatch.setattr(main, "provider_registry", lambda: ProviderRegistry(FakeBackend({})))

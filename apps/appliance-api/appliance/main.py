@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from .audit import write_audit
 from .clients import AdapterOperationError, LicenseAgentClient, MultiOtpClient
 from .config import get_settings
+from .coverage import reconcile
 from .db import SessionLocal, get_db
 from .migrate import migrate
 from .models import (
@@ -27,6 +28,8 @@ from .models import (
     UserStatus,
     event_digest,
 )
+from .native_verify import NativeVerifyUnavailable, native_verify
+from .rdp_protection import ProviderRegistry, ProviderWriteError
 from .schemas import (
     AdminCreate,
     AdminRead,
@@ -36,6 +39,8 @@ from .schemas import (
     LicenseActivate,
     LoginRequest,
     OfflineApply,
+    RdpProtectionDisable,
+    RdpProtectionEnable,
     ReasonRequest,
     ResyncRequest,
     TokenRead,
@@ -449,8 +454,15 @@ def validated_windows_username(requested: str) -> str:
             status_code=503,
             detail="Local Windows accounts could not be checked, so no MFA user was created. Try again.",
         ) from exc
+    recovery = recovery_account_or_none()
     for account in accounts:
         if str(account["username"]).casefold() == requested.casefold():
+            if recovery and str(account["username"]).casefold() == recovery.casefold():
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"'{account['username']}' is the recovery account; it is always excluded from MFA "
+                           "and never uses a seat.",
+                )
             if not account["enabled"]:
                 raise HTTPException(
                     status_code=409,
@@ -573,6 +585,7 @@ def verify_enrollment(
     )
     db.commit()
     db.refresh(user)
+    reconcile_if_on(db, principal.id)
     return user
 
 
@@ -715,11 +728,13 @@ def revoke_user(
     principal: Principal = Depends(require_operator),
     db: Session = Depends(get_db),
 ) -> MfaUser:
-    return reason_command(
+    result = reason_command(
         user_id=user_id, command="revoke", action="mfa.user.revoked",
         new_status=UserStatus.revoked, payload=payload, request=request,
         principal=principal, db=db,
     )
+    reconcile_if_on(db, principal.id)
+    return result
 
 
 @app.post("/v1/users/{user_id}/resync", response_model=UserRead)
@@ -785,6 +800,116 @@ def delete_user(
     db.commit()
     if release_after_commit:
         release_user_seat_best_effort(username_for_release)
+    reconcile_if_on(db, principal.id)
+
+
+def provider_registry() -> ProviderRegistry:
+    return ProviderRegistry()
+
+
+def recovery_account_or_none() -> str | None:
+    try:
+        return provider_registry().recovery_account()
+    except (OSError, ImportError):  # no provider on this host (tests, Linux)
+        return None
+
+
+def owner_reauth(db: Session, principal: Principal, password: str) -> None:
+    admin = db.get(LocalAdmin, principal.id)
+    if not admin or not verify_password(admin.password_hash, password):
+        raise HTTPException(401, "Password not accepted")
+
+
+def reconcile_if_on(db: Session, actor_id: str | None) -> None:
+    """Best effort after enrollment changes; the periodic job retries failures."""
+    try:
+        registry = provider_registry()
+        if not registry.is_on():
+            return
+        result = reconcile(read_local_windows_accounts(), list(db.scalars(select(MfaUser))),
+                           multiotp(), registry.recovery_account())
+        if result["errors"]:
+            write_audit(db, actor_id=actor_id, action="rdp.coverage.failed", subject_type="windows_account",
+                        subject_id=None, reason=",".join(result["errors"]), success=False)
+            db.commit()
+    except Exception:  # noqa: BLE001, S110 - never fail the enrollment request because of coverage
+        pass
+
+
+@app.get("/v1/rdp-protection")
+def rdp_protection_status(_: Principal = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+    registry = provider_registry()
+    recovery = registry.recovery_account()
+    records = {u.username.lower(): u for u in db.scalars(select(MfaUser))}
+    protected, password_only, disabled = [], [], []
+    for account in read_local_windows_accounts():
+        name = str(account["username"])
+        if recovery and name.lower() == recovery.lower():
+            continue
+        record = records.get(name.lower())
+        if not account["enabled"]:
+            disabled.append(name)
+        elif record and record.status != UserStatus.revoked:
+            protected.append(name)
+        else:
+            password_only.append(name)
+    return {"on": registry.is_on(), "recovery_account": recovery, "protected": protected,
+            "password_only": password_only, "disabled": disabled}
+
+
+@app.post("/v1/rdp-protection/enable")
+def rdp_protection_enable(
+    payload: RdpProtectionEnable, request: Request,
+    principal: Principal = Depends(require_owner), db: Session = Depends(get_db),
+) -> dict:
+    owner_reauth(db, principal, payload.password)
+    registry = provider_registry()
+    recovery = registry.recovery_account()
+    if recovery and payload.username.lower() == recovery.lower():
+        raise HTTPException(409, "Choose an enrolled account other than the recovery account")
+    user = find_mfa_user(db, payload.username)
+    if not user or user.status != UserStatus.active:
+        raise HTTPException(409, "Enroll and verify this account before turning on RDP protection")
+    try:
+        licensed = license_agent().status().get("state") in {"active", "offline_grace"}
+    except (httpx.HTTPError, RuntimeError):
+        raise HTTPException(503, "License agent unavailable") from None
+    if not licensed:
+        raise HTTPException(403, "Activate your license before turning on RDP protection")
+    try:
+        if not native_verify(user.engine_username, payload.otp):
+            raise HTTPException(400, "Code not accepted. Wait for the next code and try again.")
+    except NativeVerifyUnavailable as exc:
+        raise HTTPException(503, str(exc)) from None
+    accounts = read_local_windows_accounts()  # raises before anything changes
+    result = reconcile(accounts, list(db.scalars(select(MfaUser))), multiotp(), recovery)
+    if result["errors"]:
+        raise HTTPException(502, "Could not prepare password-only access for: " + ", ".join(result["errors"]))
+    try:
+        registry.apply(True)
+    except ProviderWriteError as exc:
+        raise HTTPException(500, str(exc)) from None
+    write_audit(db, actor_id=principal.id, action="rdp.protection.enabled", subject_type="mfa_user",
+                subject_id=user.id, reason=f"password_only={len(result['password_only'])}",
+                source_ip=request.client.host if request.client else None)
+    db.commit()
+    return {"on": True, **result}
+
+
+@app.post("/v1/rdp-protection/disable")
+def rdp_protection_disable(
+    payload: RdpProtectionDisable, request: Request,
+    principal: Principal = Depends(require_owner), db: Session = Depends(get_db),
+) -> dict:
+    owner_reauth(db, principal, payload.password)
+    try:
+        provider_registry().apply(False)
+    except ProviderWriteError as exc:
+        raise HTTPException(500, str(exc)) from None
+    write_audit(db, actor_id=principal.id, action="rdp.protection.disabled", subject_type="provider",
+                subject_id=None, source_ip=request.client.host if request.client else None)
+    db.commit()
+    return {"on": False}
 
 
 @app.get("/v1/audit", response_model=list[AuditRead])
