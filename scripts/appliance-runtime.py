@@ -114,7 +114,9 @@ def processes(repo, engine_config, state_parent, python):
         JWT_SECRET=config['jwt_secret'], SETUP_TOKEN=config['setup_token'],
         COMPANY_NAME=config['company_name'], MULTIOTP_ADAPTER_URL=f"http://127.0.0.1:{engine_config['adapter_port']}",
         MULTIOTP_ADAPTER_TOKEN=engine_config['adapter_token'],
-        LICENSE_AGENT_URL=f"http://127.0.0.1:{config['agent_port']}", LICENSE_AGENT_TOKEN=config['agent_token'])
+        LICENSE_AGENT_URL=f"http://127.0.0.1:{config['agent_port']}", LICENSE_AGENT_TOKEN=config['agent_token'],
+        ENGINE_CONFIG_FILE=str(state_parent / 'config.json'),
+        PROVIDER_VALIDATION_DIR=str(repo.parent / 'provider-validation'))
     agent_env = dict(common, PYTHONPATH=str(repo / 'services/license-agent'),
         STATE_DIR=config['license_state_dir'], LICENSE_SERVER_URL=config['license_url'],
         AGENT_SHARED_TOKEN=config['agent_token'], BLISS_SIGNING_PUBLIC_KEY_FILE=config['public_key_file'],

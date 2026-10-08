@@ -167,8 +167,24 @@ def start_heartbeat_scheduler() -> None:
         id="bliss-license-heartbeat",
         replace_existing=True,
     )
+    scheduler.add_job(
+        periodic_coverage, "interval", seconds=COVERAGE_INTERVAL_SECONDS,
+        id="bliss-rdp-coverage", replace_existing=True,
+    )
     if not scheduler.running:
         scheduler.start()
+
+
+COVERAGE_INTERVAL_SECONDS = 600
+
+
+def periodic_coverage() -> None:
+    """Give newly created local accounts password-only RDP access while protection is on."""
+    db = SessionLocal()
+    try:
+        reconcile_if_on(db, None)
+    finally:
+        db.close()
 
 
 @app.on_event("shutdown")

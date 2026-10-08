@@ -159,3 +159,21 @@ def test_enroll_while_on_replaces_password_only(env):
     assert engine.kind["ekta"] == "t"
     status = client.get("/v1/rdp-protection").json()
     assert "Ekta" in status["protected"]
+
+
+def test_periodic_coverage_adds_new_account(env, monkeypatch):
+    client, _, engine, state, db, _ = env
+    client.post("/v1/rdp-protection/enable", json=GOOD)
+    state["accounts"].append({"username": "NewHire", "display_name": None, "enabled": True})
+    monkeypatch.setattr(main, "SessionLocal", lambda: db)
+    monkeypatch.setattr(db, "close", lambda: None)
+    main.periodic_coverage()
+    assert engine.kind["newhire"] == "w"
+
+
+def test_periodic_coverage_does_nothing_when_off(env, monkeypatch):
+    _, _, engine, _, db, _ = env
+    monkeypatch.setattr(main, "SessionLocal", lambda: db)
+    monkeypatch.setattr(db, "close", lambda: None)
+    main.periodic_coverage()
+    assert "ekta" not in engine.kind
