@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     # Check new MFA usernames against local Windows accounts: "auto" on a Windows host,
     # "required" everywhere (fails closed if accounts cannot be read), "off" for RADIUS-only.
     windows_account_validation: str = "auto"
+    # Engine config.json (auth_port, native_shared_secret) and the provider validation directory,
+    # used to verify a code through the installed Windows multiOTP client before enabling RDP MFA.
+    engine_config_file: str | None = None
+    provider_validation_dir: str | None = None
 
 @lru_cache
 def get_settings() -> Settings:
