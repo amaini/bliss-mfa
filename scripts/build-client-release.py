@@ -57,12 +57,13 @@ guide = '''Bliss MFA Windows prototype
    The installer verifies the appliance archive, installs its service and the signed
    upstream Windows provider, and opens the private local setup page.
 3. Create your local portal owner. Activate your paid license on the License page.
-4. On RDP Users, add an existing local Windows account, scan its authenticator QR
-   code, and verify a fresh code. The prototype does not create Windows accounts.
-5. Keep your tested recovery-administrator session or console available. Run
-   Enable-RdpProtection.cmd from this extracted download. It checks the license and
-   enrollment, verifies a fresh code through the installed native client, and enables
-   RDP logon/unlock protection. The recovery administrator remains excluded.
+4. On Windows Accounts, choose Enroll MFA for an existing local account (not your
+   recovery administrator), scan its authenticator QR code and verify a fresh code.
+5. When asked "Protect RDP sign-in now?", enter your portal password and a fresh code
+   and choose Turn on. Enrolled accounts are then asked for a code on a second screen
+   when they connect over Remote Desktop; other accounts keep signing in over RDP with
+   their password. Signing in at the computer itself never asks for a code, and the
+   recovery administrator is always excluded. Turn it off from the same card.
 6. Wait for the next code. Test RDP sign-in with the enrolled account and its Windows
    password; then check incorrect and empty OTP rejection. Record the result on the
    local portal's Get started page.
