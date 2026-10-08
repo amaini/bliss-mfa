@@ -16,8 +16,9 @@ key they shipped with, and a different key cannot update them.
 The private half of the previous update key (SHA-256
 `6d37a5b11ad0bb606d2c65ed10c98ea437b8e9503937a6a9382ce001ad153d42`, pinned by the 0.1.2 pilot
 RC and later test builds) could not be located, so no further update could ever be signed
-for it. It was replaced before any customer installation was known to pin it: the public
-update feed had not been deployed (`/updates/stable.json` returned 404).
+for it. It was replaced before any customer received Bliss MFA (confirmed by the owner on
+2026-10-07; the public update feed had never been deployed). Only internal test machines
+pinned the old key.
 
 Installations that pin the old key cannot receive signed updates. Migrate each one once,
 deliberately, as an administrator: uninstall Bliss MFA (private data is retained), delete
