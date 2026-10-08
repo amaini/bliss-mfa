@@ -78,8 +78,14 @@ def test_test_signing_key_never_enters_customer_artifacts(tmp_path, fetched):
                 assert b'PRIVATE KEY' not in archive.read(name), (artifact.name, name)
 
 
+def test_committed_update_public_key_matches_the_pinned_hash():
+    source = SCRIPT.read_text(encoding='utf-8')
+    pinned = source.split("PINNED_UPDATE_KEY_SHA256 = '")[1].split("'")[0]
+    assert sha(SCRIPT.parents[1] / 'deployment/windows/keys/update-public.pem') == pinned
+
+
 def test_production_build_requires_the_pinned_update_key(tmp_path, fetched):
-    result = build(tmp_path, fetched)
+    result = build(tmp_path, fetched, '--update-public-key', str(tmp_path / 'missing-update-public.pem'))
     assert result.returncode != 0
     assert 'update' in (result.stdout + result.stderr).lower()
     assert not list((tmp_path / 'release').glob('*.zip')) if (tmp_path / 'release').exists() else True
