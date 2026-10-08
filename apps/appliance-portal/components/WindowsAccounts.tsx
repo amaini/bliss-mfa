@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { Shell } from "./Shell";
+import { RdpProtection } from "./RdpProtection";
 import { EnrollmentPanel, Provisioning, startEnrollment } from "./EnrollmentPanel";
 import { api } from "../lib/api";
 
@@ -33,6 +34,8 @@ function stateLabel(account: WindowsAccount): { text: string; pill: string } {
 
 export default function WindowsAccounts() {
   const [accounts, setAccounts] = useState<WindowsAccount[] | null>(null);
+  const [verifiedUser, setVerifiedUser] = useState<string | undefined>(undefined);
+  const [rdpRefresh, setRdpRefresh] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busyUser, setBusyUser] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -92,6 +95,7 @@ export default function WindowsAccounts() {
   const busy = busyUser !== null;
   return (
     <Shell title="Windows Accounts">
+      <RdpProtection suggestedUser={verifiedUser} refreshKey={rdpRefresh} />
       <div className="toolbar">
         <div>
           <strong>{loading && !accounts ? "Reading local accounts…" : `${accounts?.length ?? 0} local Windows accounts`}</strong>
@@ -107,7 +111,7 @@ export default function WindowsAccounts() {
         <EnrollmentPanel
           provisioning={provisioning}
           onClose={() => setProvisioning(null)}
-          onVerified={(username) => { setProvisioning(null); setMessage(`Enrollment verified for ${username}.`); load(); }}
+          onVerified={(username) => { setProvisioning(null); setMessage(`Enrollment verified for ${username}.`); setVerifiedUser(username); setRdpRefresh((n) => n + 1); load(); }}
         />
       ) : null}
 

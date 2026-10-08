@@ -42,9 +42,27 @@ def main() -> None:
     from appliance import main as appliance
 
     class FakeEngine:
-        def create_user(self, username): pass
+        def __init__(self): self.kind = {}
+        def create_user(self, username): self.kind[username.lower()] = "t"
         def provisioning_uri(self, username): return f"otpauth://totp/BlissDemo:{username}?secret=JBSWY3DPEHPK3PXP&issuer=BlissDemo"
         def verify(self, username, otp): return otp == "000000"
+        def delete_user(self, username): self.kind.pop(username.lower(), None); return True
+        def ensure_without2fa(self, username):
+            if self.kind.get(username.lower()) == "t":
+                return False
+            self.kind[username.lower()] = "w"
+            return True
+
+    class DemoProviderBackend:  # in-memory sign-in provider settings; nothing real is changed
+        values = {"cpus_logon": "3d", "cpus_unlock": "3d", "cpus_credui": "3d", "excluded_account": r"DEMO-PC\Administrator"}
+        def get(self, name): return self.values.get(name)
+        def set(self, name, value, kind): self.values[name] = value
+        def delete(self, name): self.values.pop(name, None)
+        def flush(self): pass
+
+    from appliance.rdp_protection import ProviderRegistry
+    appliance.provider_registry = lambda: ProviderRegistry(DemoProviderBackend())
+    appliance.native_verify = lambda username, otp: otp == "000000"
 
     reserved: set[str] = set()
 
