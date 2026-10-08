@@ -26,8 +26,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 REPO = Path(__file__).resolve().parents[1]
 SCRIPTS = REPO / 'scripts'
 KEYS = REPO / 'deployment/windows/keys'
-# Production update-signing public key recorded for pilot RC2 (docs/pilot-release-0.1.2-validation.md).
-PINNED_UPDATE_KEY_SHA256 = '6d37a5b11ad0bb606d2c65ed10c98ea437b8e9503937a6a9382ce001ad153d42'
+# Production update-signing public key, rotated 2026-10-07 (deployment/windows/keys/README.md).
+PINNED_UPDATE_KEY_SHA256 = '63983efc4773a356155f22c78fef67df768acc98f2d1af9eb15519a3777202cd'
 TEST_UPDATE_URL = 'https://license.blissitek.ca/updates/test/bliss-mfa-update-{version}-TEST.zip'
 UPDATE_URL = 'https://license.blissitek.ca/updates/bliss-mfa-update-{version}.zip'
 
