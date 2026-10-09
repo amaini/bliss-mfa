@@ -30,6 +30,7 @@ function stateLabel(account: WindowsAccount): { text: string; pill: string } {
       ? { text: "MFA enrolled · locked", pill: "locked" }
       : { text: "MFA enrolled", pill: "active" };
     case "mfa_inactive": return { text: account.mfa_status === "revoked" ? "MFA revoked" : "MFA disabled", pill: "disabled" };
+    default: return { text: String(account.state), pill: "disabled" };  // never crash on a state added by a newer server
   }
 }
 
