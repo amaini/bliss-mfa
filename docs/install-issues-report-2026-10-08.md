@@ -30,6 +30,7 @@ second-step code screen, and a non-excluded user signing in at the console with 
 | Issue | Effect on an install | Fix |
 |---|---|---|
 | Portal pages cached for a year (`s-maxage=31536000`) through the HTTPS proxy, with a build ID that didn't change between builds | After an update the browser kept showing the **old dashboard**; the RDP protection card was missing on the laptop | Proxy sends `no-store` for everything except `/_next/static/`. Releases must build the portal (no `--skip-portal-build`) so the build ID is the commit |
+| Next.js route cache (`portal/.next/server/route-cache/...`) kept the **previous version's pages** across application updates (same folder name every build) | Laptop served 0.1.6 pages after updating to 0.1.7/0.1.8 (no RDP protection card); VM served 0.1.7 pages on 0.1.8 and the Windows Accounts page crashed ("client-side exception") | 0.1.9: the supervisor deletes the route cache before starting the portal; the account list never crashes on an unknown state |
 | Recovery account offered "Enroll MFA" and could take the only seat | Owner enrolled their own excluded account; no seat left for real users | API refuses it (409); list labels it "Recovery account · never asked for a code" |
 | Customers had to run `Enable-RdpProtection.cmd` | Not possible for customers | Dashboard card with owner re-auth and a native-client code check |
 | Enrolling right after verify reused the same code | "Code not accepted" on the first try | Form asks for the next code |
