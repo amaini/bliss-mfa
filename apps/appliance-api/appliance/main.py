@@ -347,12 +347,12 @@ def list_users(
     return list(db.scalars(select(MfaUser).order_by(MfaUser.username)))
 
 
-@app.get("/v1/windows-users")
-def list_windows_users(
-    _: Principal = Depends(require_operator),
-    db: Session = Depends(get_db),
-) -> list[dict[str, str | bool | None]]:
-    """Read-only inventory of local Windows accounts; never create or change accounts."""
+def read_local_windows_accounts() -> list[dict[str, str | bool | None]]:
+    """Read-only inventory of local Windows accounts; never creates or changes accounts.
+
+    Raises 503 when not running on Windows and 502 when the inventory cannot be read or parsed,
+    so callers that depend on it (enrollment validation) fail closed.
+    """
     if os.name != "nt":
         raise HTTPException(status_code=503, detail="Windows account discovery is available only on the appliance")
     script = """$ErrorActionPreference='Stop'
@@ -375,19 +375,94 @@ def list_windows_users(
             rows = [rows]
         if not isinstance(rows, list):
             raise ValueError("unexpected account list")  # noqa: TRY004 - invalid external JSON
-        enrolled = {username.casefold() for username in db.scalars(select(MfaUser.username))}
-        return [
-            {
-                "username": row["username"],
-                "display_name": row.get("display_name") if isinstance(row.get("display_name"), str) else None,
-                "enabled": bool(row.get("enabled")),
-                "enrolled": row["username"].casefold() in enrolled,
-            }
-            for row in rows
-            if isinstance(row, dict) and isinstance(row.get("username"), str)
-        ]
     except (json.JSONDecodeError, ValueError) as exc:
         raise HTTPException(status_code=502, detail="Windows account list could not be parsed") from exc
+    return [
+        {
+            "username": row["username"],
+            "display_name": row.get("display_name") if isinstance(row.get("display_name"), str) else None,
+            "enabled": bool(row.get("enabled")),
+        }
+        for row in rows
+        if isinstance(row, dict) and isinstance(row.get("username"), str)
+    ]
+
+
+def windows_account_state(enabled: bool, mfa_status: UserStatus | None) -> str:
+    """Account state shown on the Windows Accounts page.
+
+    "enrolled" means only that the authenticator enrollment was verified (MFA record active or
+    locked). It does not mean Windows sign-in is enforced: that depends on the Credential
+    Provider / RDP protection configuration, which this page does not inspect.
+    """
+    if not enabled:
+        return "disabled_account"
+    if mfa_status is None:
+        return "not_enrolled"
+    if mfa_status == UserStatus.pending:
+        return "pending"
+    if mfa_status in {UserStatus.active, UserStatus.locked}:
+        return "enrolled"
+    return "mfa_inactive"  # MFA record disabled or revoked
+
+
+def find_mfa_user(db: Session, username: str) -> MfaUser | None:
+    """Windows usernames are case-insensitive, so MFA records are matched the same way."""
+    return db.scalar(select(MfaUser).where(func.lower(MfaUser.username) == username.lower()))
+
+
+def windows_account_validation_applies() -> bool:
+    mode = settings.windows_account_validation.strip().lower()
+    if mode == "off":
+        return False
+    if mode == "required":
+        return True
+    return os.name == "nt"  # "auto": the appliance host is Windows
+
+
+@app.get("/v1/windows-users")
+def list_windows_users(
+    _: Principal = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> list[dict[str, str | bool | None]]:
+    """Local Windows accounts matched to MFA records (read-only)."""
+    accounts = read_local_windows_accounts()
+    records = {user.username.casefold(): user for user in db.scalars(select(MfaUser))}
+    rows = []
+    for account in accounts:
+        record = records.get(str(account["username"]).casefold())
+        rows.append({
+            **account,
+            "mfa_user_id": record.id if record else None,
+            "mfa_status": record.status.value if record else None,
+            "state": windows_account_state(bool(account["enabled"]), record.status if record else None),
+        })
+    return rows
+
+
+def validated_windows_username(requested: str) -> str:
+    """Return the exact local Windows account name for an enrollment request, or refuse it."""
+    try:
+        accounts = read_local_windows_accounts()
+    except HTTPException as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Local Windows accounts could not be checked, so no MFA user was created. Try again.",
+        ) from exc
+    for account in accounts:
+        if str(account["username"]).casefold() == requested.casefold():
+            if not account["enabled"]:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"The local Windows account '{account['username']}' is disabled. Enable it in "
+                           "Windows before enrolling it for MFA.",
+                )
+            return str(account["username"])
+    raise HTTPException(
+        status_code=422,
+        detail=f"'{requested}' is not a local Windows account on this computer. Use the exact account name "
+               "shown on the Windows Accounts page (domain accounts are not supported here).",
+    )
 
 
 @app.post("/v1/users", response_model=UserRead, status_code=201)
@@ -397,30 +472,35 @@ def create_user(
     principal: Principal = Depends(require_operator),
     db: Session = Depends(get_db),
 ) -> MfaUser:
-    if db.scalar(select(MfaUser).where(MfaUser.username == payload.username)):
-        raise HTTPException(status_code=409, detail="User already exists")
+    username = payload.username
+    if find_mfa_user(db, username):
+        raise HTTPException(status_code=409, detail=f"An MFA user for '{username}' already exists")
+    if windows_account_validation_applies():
+        username = validated_windows_username(username)
+        if find_mfa_user(db, username):
+            raise HTTPException(status_code=409, detail=f"An MFA user for '{username}' already exists")
 
-    seat = reserve_user_seat(payload.username)
+    seat = reserve_user_seat(username)
 
     try:
-        multiotp().create_user(payload.username)
+        multiotp().create_user(username)
     except (httpx.HTTPError, RuntimeError) as exc:
         if not seat.get("already_reserved"):
-            release_user_seat_best_effort(payload.username)
+            release_user_seat_best_effort(username)
         write_audit(
             db, actor_id=principal.id, action="mfa.user.create_failed",
-            subject_type="mfa_user", subject_id=payload.username, success=False,
+            subject_type="mfa_user", subject_id=username, success=False,
             source_ip=request.client.host if request.client else None,
         )
         db.commit()
         raise HTTPException(status_code=502, detail="Unable to create user in MFA engine") from exc
 
     user = MfaUser(
-        username=payload.username,
+        username=username,
         display_name=payload.display_name,
         email=str(payload.email) if payload.email else None,
         protected_rdp=True,
-        engine_username=payload.username,
+        engine_username=username,
         status=UserStatus.pending,
     )
     db.add(user)

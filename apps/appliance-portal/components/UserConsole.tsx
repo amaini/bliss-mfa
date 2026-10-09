@@ -1,9 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import QRCode from "qrcode";
 
 import { Shell } from "./Shell";
+import { EnrollmentPanel, Provisioning, startEnrollment } from "./EnrollmentPanel";
 import { api } from "../lib/api";
 
 type User = {
@@ -16,13 +16,6 @@ type User = {
   created_at: string;
 };
 
-type WindowsAccount = {
-  username: string;
-  display_name: string | null;
-  enabled: boolean;
-  enrolled: boolean;
-};
-
 type UserAction = "disable" | "enable" | "unlock" | "revoke" | "delete";
 const actionLabels: Record<UserAction, string> = {
   disable: "Disable OTP for", enable: "Re-enable OTP for", unlock: "Unlock", revoke: "Revoke OTP for", delete: "Delete",
@@ -32,21 +25,17 @@ export default function UserConsole({ title = "RDP Users" }: { title?: string })
   const [users, setUsers] = useState<User[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
-  const [qr, setQr] = useState<string | null>(null);
-  const [provisioning, setProvisioning] = useState<{ userId: string; username: string; uri: string } | null>(null);
+  const [provisioning, setProvisioning] = useState<Provisioning | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [action, setAction] = useState<{ user: User; kind: UserAction } | null>(null);
   const [events, setEvents] = useState<{ id: string; action: string; created_at: string; success: boolean }[]>([]);
   const [auditError, setAuditError] = useState<string | null>(null);
-  const [windowsAccounts, setWindowsAccounts] = useState<WindowsAccount[] | null>(null);
-  const [windowsAccountError, setWindowsAccountError] = useState<string | null>(null);
-  const [scanningWindowsAccounts, setScanningWindowsAccounts] = useState(false);
   const managedUsers = users.filter((user) => !["disabled", "revoked"].includes(user.status));
   const inactiveUsers = users.filter((user) => ["disabled", "revoked"].includes(user.status));
 
-  function closeEnrollment() { setProvisioning(null); setQr(null); }
+  function closeEnrollment() { setProvisioning(null); }
 
   function openAction(user: User, kind: UserAction) {
     closeEnrollment();
@@ -67,49 +56,6 @@ export default function UserConsole({ title = "RDP Users" }: { title?: string })
   }
 
   useEffect(() => { load(); }, []);
-
-  async function discoverWindowsAccounts() {
-    setWindowsAccountError(null);
-    setScanningWindowsAccounts(true);
-    try {
-      setWindowsAccounts(await api<WindowsAccount[]>("/windows-users"));
-    } catch (err) {
-      setWindowsAccountError(err instanceof Error ? err.message : "Unable to discover Windows accounts");
-    } finally {
-      setScanningWindowsAccounts(false);
-    }
-  }
-
-  async function addWindowsAccount(account: WindowsAccount) {
-    setBusy(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const user = await api<User>("/users", {
-        method: "POST",
-        body: JSON.stringify({ username: account.username, display_name: account.display_name, email: null }),
-      });
-      setWindowsAccounts((current) => current
-        ? current.map((entry) =>
-            entry.username.toLowerCase() === account.username.toLowerCase()
-              ? { ...entry, enrolled: true }
-              : entry)
-        : current);
-      await load();
-      const enrollment = await api<{ provisioning_uri: string }>(`/users/${user.id}/enrollment`, {
-        method: "POST",
-        body: "{}",
-      });
-      setProvisioning({ userId: user.id, username: user.username, uri: enrollment.provisioning_uri });
-      setQr(await QRCode.toDataURL(enrollment.provisioning_uri, { width: 260, margin: 1 }));
-      setMessage(`MFA record created for ${user.username}. Scan the QR code to finish enrollment.`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to start enrollment");
-      await load();
-    } finally {
-      setBusy(false);
-    }
-  }
 
   useEffect(() => {
     if (title === "Dashboard") {
@@ -138,13 +84,7 @@ export default function UserConsole({ title = "RDP Users" }: { title?: string })
       // Refresh immediately so a provisioning failure still leaves the created
       // pending record visible and available for an enrollment retry.
       await load();
-      const enrollment = await api<{ provisioning_uri: string }>(`/users/${user.id}/enrollment`, {
-        method: "POST",
-        body: "{}",
-      });
-      const dataUrl = await QRCode.toDataURL(enrollment.provisioning_uri, { width: 260, margin: 1 });
-      setProvisioning({ userId: user.id, username: user.username, uri: enrollment.provisioning_uri });
-      setQr(dataUrl);
+      setProvisioning(await startEnrollment(user.id, user.username));
       formElement.reset();
       setShowNew(false);
     } catch (err) {
@@ -191,36 +131,9 @@ export default function UserConsole({ title = "RDP Users" }: { title?: string })
     setMessage(null);
     closeEnrollment();
     try {
-      const enrollment = await api<{ provisioning_uri: string }>(`/users/${user.id}/enrollment`, {
-        method: "POST",
-        body: "{}",
-      });
-      const dataUrl = await QRCode.toDataURL(enrollment.provisioning_uri, { width: 260, margin: 1 });
-      setProvisioning({ userId: user.id, username: user.username, uri: enrollment.provisioning_uri });
-      setQr(dataUrl);
+      setProvisioning(await startEnrollment(user.id, user.username));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to start enrollment");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function verify(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!provisioning) return;
-    const otp = String(new FormData(event.currentTarget).get("otp") ?? "").trim();
-    setBusy(true);
-    setError(null);
-    try {
-      await api<User>(`/users/${provisioning.userId}/verify`, {
-        method: "POST",
-        body: JSON.stringify({ otp }),
-      });
-      setMessage(`Enrollment verified for ${provisioning.username}.`);
-      closeEnrollment();
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Verification failed");
     } finally {
       setBusy(false);
     }
@@ -262,27 +175,8 @@ export default function UserConsole({ title = "RDP Users" }: { title?: string })
       {error ? <div className="notice" role="alert">{error}</div> : null}
       {message ? <div className="notice goodNotice" role="status">{message}</div> : null}
 
-      <section className="userSection" aria-labelledby="windows-accounts-title">
-        <div className="sectionHeading windowsAccountsHeading">
-          <div><h2 id="windows-accounts-title">Windows accounts</h2><p className="muted">Read-only discovery of local accounts on this computer. Domain accounts are not included.</p></div>
-          <button className="secondary" disabled={scanningWindowsAccounts || busy} onClick={discoverWindowsAccounts}>
-            {scanningWindowsAccounts ? "Scanning…" : "Detect accounts"}
-          </button>
-        </div>
-        {windowsAccountError ? <div className="notice" role="alert">{windowsAccountError}</div> : null}
-        {windowsAccounts?.length ? <div className="card windowsAccountsList">
-          {windowsAccounts.map((account) => (
-            <div className="row windowsAccountRow" key={account.username}>
-              <div className="nameBlock"><strong>{account.display_name || account.username}</strong><small>{account.username}{account.enabled ? " · enabled" : " · disabled"}</small></div>
-              <button className="primary" disabled={!account.enabled || account.enrolled || busy}
-                onClick={() => addWindowsAccount(account)}>
-                {account.enrolled ? "Already added" : !account.enabled ? "Account disabled" : busy ? "Starting…" : "Enroll in MFA"}
-              </button>
-            </div>
-          ))}
-        </div> : null}
-        {windowsAccounts?.length === 0 ? <p className="muted">No local Windows accounts were found.</p> : null}
-      </section>
+      <p className="muted">To enroll an existing account on this computer, use <a href="/windows-accounts">Windows Accounts</a>.
+        New users must match a local Windows account name; the server checks this.</p>
 
       {action ? (
         <form key={`${action.user.id}:${action.kind}`} className="card stack actionPanel" onSubmit={submitAction} aria-labelledby="action-title">
@@ -298,7 +192,8 @@ export default function UserConsole({ title = "RDP Users" }: { title?: string })
       {showNew ? (
         <form className="card formCard" onSubmit={createUser}>
           <div className="formHeading"><h2>New MFA user</h2><p className="muted">Create the MFA record, then enroll an authenticator.</p></div>
-          <label>Username<input name="username" required placeholder="jsmith" /></label>
+          <label>Windows account name<input name="username" required placeholder="jsmith" autoComplete="off" /></label>
+          <p className="muted">Must be an existing, enabled local Windows account on this computer.</p>
           <label>Display name<input name="display_name" placeholder="John Smith" /></label>
           <label>Email<input name="email" type="email" placeholder="john@example.com" /></label>
           <button className="primary" type="submit" disabled={busy}>{busy ? "Creating…" : "Create & enroll"}</button>
@@ -306,24 +201,11 @@ export default function UserConsole({ title = "RDP Users" }: { title?: string })
       ) : null}
 
       {provisioning ? (
-        <section className="card stack enrollment" aria-labelledby="enrollment-title">
-          <div>
-            <p className="eyebrow">Enrollment</p>
-            <h2 id="enrollment-title">Enroll {provisioning.username}</h2>
-            <p className="muted">Keep this enrollment information private.</p>
-          </div>
-          <div className="enrollmentGrid">
-            {qr ? <img className="qr" src={qr} alt={`Authenticator enrollment QR code for ${provisioning.username}`} /> : null}
-            <div className="enrollmentSteps">
-              <p><strong>1. Add to your authenticator</strong><br /><span className="muted">Scan the QR code to add this account.</span></p>
-              <details><summary>Manual setup</summary><code className="codeBox">{provisioning.uri}</code></details>
-              <form className="otpForm" onSubmit={verify}>
-                <label>2. Enter the first one-time code<input name="otp" inputMode="numeric" autoComplete="one-time-code" required placeholder="Code from your authenticator" /></label>
-                <div className="actions"><button className="primary" type="submit" disabled={busy}>{busy ? "Verifying…" : "Verify enrollment"}</button><button type="button" disabled={busy} onClick={closeEnrollment}>Close</button></div>
-              </form>
-            </div>
-          </div>
-        </section>
+        <EnrollmentPanel
+          provisioning={provisioning}
+          onClose={closeEnrollment}
+          onVerified={(username) => { closeEnrollment(); setMessage(`Enrollment verified for ${username}.`); load(); }}
+        />
       ) : null}
 
       <section className="userSection" aria-labelledby="accounts-title">

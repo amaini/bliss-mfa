@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const navigation = [["/", "Dashboard"], ["/onboarding", "Get started"], ["/users", "RDP Users"], ["/administrators", "Administrators"], ["/audit", "Audit"], ["/license", "License & Billing"]] as const;
+const navigation = [["/", "Dashboard"], ["/onboarding", "Get started"], ["/users", "RDP Users"], ["/windows-accounts", "Windows Accounts"],["/administrators", "Administrators"], ["/audit", "Audit"], ["/license", "License & Billing"]] as const;
 
 export function Shell({ title, children }: { title: string; children: ReactNode }) {
   const pathname = usePathname();
