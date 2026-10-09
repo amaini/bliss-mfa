@@ -4,6 +4,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -108,6 +109,11 @@ def processes(repo, engine_config, state_parent, python):
     portal = work / 'portal/server.js'
     if not node.is_file() or not portal.is_file():
         raise RuntimeError('Built portal or Node runtime missing')
+    # Next.js keeps rendered pages in .next/server/route-cache under a folder name that does not change
+    # between builds; after an application update it would keep serving the previous version's pages.
+    route_cache = portal.parent / '.next' / 'server' / 'route-cache'
+    if route_cache.is_dir() and not route_cache.is_symlink():
+        shutil.rmtree(route_cache)
     common = os.environ.copy()
     api_env = dict(common, PYTHONPATH=str(repo / 'apps/appliance-api'), APP_ENV='production',
         DATABASE_URL='sqlite+pysqlite:///' + Path(config['database_file']).as_posix(),
