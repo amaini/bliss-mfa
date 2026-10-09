@@ -57,3 +57,20 @@ def test_failed_upstream_hides_internal_details(monkeypatch):
     response = TestClient(portal_proxy.app, base_url='https://localhost:19443').get('/setup')
     assert response.status_code == 503
     assert 'private' not in response.text
+
+
+@pytest.mark.parametrize('path,upstream_cache,expected', [
+    # Pages and RSC payloads must never be cached: after an upgrade the browser has to load the new portal.
+    ('/windows-accounts', 's-maxage=31536000', 'no-store'),
+    ('/', 's-maxage=31536000, stale-while-revalidate', 'no-store'),
+    # Content-hashed build assets keep Next's immutable caching.
+    ('/_next/static/chunks/729-abc.js', 'public, max-age=31536000, immutable', 'public, max-age=31536000, immutable'),
+])
+def test_pages_are_never_cached_but_hashed_assets_are(monkeypatch, path, upstream_cache, expected):
+    def upstream(request):
+        return httpx.Response(200, text='x', headers={'Cache-Control': upstream_cache})
+    client_class = httpx.AsyncClient
+    monkeypatch.setattr(portal_proxy.httpx, 'AsyncClient',
+        lambda **kwargs: client_class(transport=httpx.MockTransport(upstream), **kwargs))
+    client = TestClient(portal_proxy.app, base_url='https://localhost:19443')
+    assert client.get(path).headers['cache-control'] == expected

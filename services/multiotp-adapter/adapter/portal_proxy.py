@@ -39,7 +39,10 @@ async def forward(request: Request, path: str):
             response.headers.append('set-cookie', cookie)
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['Referrer-Policy'] = 'no-referrer'
-        response.headers['Cache-Control'] = 'no-store' if path.startswith('api/') else response.headers.get('cache-control', 'no-store')
+        # Only content-hashed build assets may be cached. Pages and RSC payloads are no-store, so a
+        # browser always loads the portal that is installed now, not one from before an upgrade.
+        response.headers['Cache-Control'] = (response.headers.get('cache-control', 'no-store')
+                                             if path.startswith('_next/static/') else 'no-store')
         return response
     except httpx.HTTPError:
         return Response(status_code=503)

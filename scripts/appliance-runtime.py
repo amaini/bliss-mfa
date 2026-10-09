@@ -4,6 +4,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -108,13 +109,20 @@ def processes(repo, engine_config, state_parent, python):
     portal = work / 'portal/server.js'
     if not node.is_file() or not portal.is_file():
         raise RuntimeError('Built portal or Node runtime missing')
+    # Next.js keeps rendered pages in .next/server/route-cache under a folder name that does not change
+    # between builds; after an application update it would keep serving the previous version's pages.
+    route_cache = portal.parent / '.next' / 'server' / 'route-cache'
+    if route_cache.is_dir() and not route_cache.is_symlink():
+        shutil.rmtree(route_cache)
     common = os.environ.copy()
     api_env = dict(common, PYTHONPATH=str(repo / 'apps/appliance-api'), APP_ENV='production',
         DATABASE_URL='sqlite+pysqlite:///' + Path(config['database_file']).as_posix(),
         JWT_SECRET=config['jwt_secret'], SETUP_TOKEN=config['setup_token'],
         COMPANY_NAME=config['company_name'], MULTIOTP_ADAPTER_URL=f"http://127.0.0.1:{engine_config['adapter_port']}",
         MULTIOTP_ADAPTER_TOKEN=engine_config['adapter_token'],
-        LICENSE_AGENT_URL=f"http://127.0.0.1:{config['agent_port']}", LICENSE_AGENT_TOKEN=config['agent_token'])
+        LICENSE_AGENT_URL=f"http://127.0.0.1:{config['agent_port']}", LICENSE_AGENT_TOKEN=config['agent_token'],
+        ENGINE_CONFIG_FILE=str(state_parent / 'config.json'),
+        PROVIDER_VALIDATION_DIR=str(repo.parent / 'provider-validation'))
     agent_env = dict(common, PYTHONPATH=str(repo / 'services/license-agent'),
         STATE_DIR=config['license_state_dir'], LICENSE_SERVER_URL=config['license_url'],
         AGENT_SHARED_TOKEN=config['agent_token'], BLISS_SIGNING_PUBLIC_KEY_FILE=config['public_key_file'],

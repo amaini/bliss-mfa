@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 
 import { Shell } from "./Shell";
+import { RdpProtection } from "./RdpProtection";
 import { EnrollmentPanel, Provisioning, startEnrollment } from "./EnrollmentPanel";
 import { api } from "../lib/api";
 
@@ -24,6 +25,8 @@ const actionLabels: Record<UserAction, string> = {
 export default function UserConsole({ title = "RDP Users" }: { title?: string }) {
   const [users, setUsers] = useState<User[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [verifiedUser, setVerifiedUser] = useState<string | undefined>(undefined);
+  const [rdpRefresh, setRdpRefresh] = useState(0);
   const [showNew, setShowNew] = useState(false);
   const [provisioning, setProvisioning] = useState<Provisioning | null>(null);
   const [loading, setLoading] = useState(true);
@@ -167,6 +170,7 @@ export default function UserConsole({ title = "RDP Users" }: { title?: string })
 
   return (
     <Shell title={title}>
+      <RdpProtection suggestedUser={verifiedUser} refreshKey={rdpRefresh} />
       <div className="toolbar">
         <div><strong>{loading ? "Loading accounts…" : `${users.length} MFA accounts`}</strong><div className="muted">Manage enrollment and OTP access for your RDP users.</div></div>
         <button className="primary" disabled={busy} onClick={() => { setAction(null); closeEnrollment(); setShowNew((value) => !value); }}>{showNew ? "Cancel new user" : "+ New user"}</button>
@@ -204,7 +208,7 @@ export default function UserConsole({ title = "RDP Users" }: { title?: string })
         <EnrollmentPanel
           provisioning={provisioning}
           onClose={closeEnrollment}
-          onVerified={(username) => { closeEnrollment(); setMessage(`Enrollment verified for ${username}.`); load(); }}
+          onVerified={(username) => { closeEnrollment(); setMessage(`Enrollment verified for ${username}.`); setVerifiedUser(username); setRdpRefresh((n) => n + 1); load(); }}
         />
       ) : null}
 

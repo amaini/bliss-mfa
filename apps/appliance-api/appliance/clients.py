@@ -82,6 +82,22 @@ class MultiOtpClient:
         )
         return operation_ok(response)
 
+    def ensure_without2fa(self, username: str) -> bool:
+        response = httpx.post(
+            f"{self.base_url}/v1/users/{quote(username, safe='')}/without2fa",
+            headers=self._headers(), timeout=15,
+        )
+        return operation_ok(response)
+
+    def without2fa_status(self, username: str) -> dict:
+        response = httpx.get(
+            f"{self.base_url}/v1/users/{quote(username, safe='')}/without2fa",
+            headers=self._headers(), timeout=15,
+        )
+        response.raise_for_status()
+        body = response.json()
+        return {"without2fa": body["without2fa"] is True, "exists": body["exists"] is True}
+
 
 class LicenseAgentClient:
     def __init__(self) -> None:

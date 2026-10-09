@@ -92,3 +92,13 @@ class AuditRead(BaseModel):
     previous_hash: str | None
     event_hash: str
     created_at: datetime
+
+
+class RdpProtectionEnable(BaseModel):
+    password: str = Field(min_length=1, max_length=256)
+    username: str = Field(pattern=r"^[A-Za-z0-9_.@-]{1,100}$")
+    otp: str = Field(pattern=r"^\d{6}$")
+
+
+class RdpProtectionDisable(BaseModel):
+    password: str = Field(min_length=1, max_length=256)
