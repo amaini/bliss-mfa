@@ -106,7 +106,7 @@ export function RdpProtection({ suggestedUser, refreshKey = 0 }: { suggestedUser
                 </select>
               </label>
               <label>
-                Fresh code for that account
+                Next code for that account (wait for it to change; a code already used is refused)
                 <input name="otp" inputMode="numeric" pattern="\d{6}" maxLength={6} autoComplete="one-time-code" required />
               </label>
               <p className="muted">
