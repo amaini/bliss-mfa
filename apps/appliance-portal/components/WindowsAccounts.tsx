@@ -7,7 +7,7 @@ import { RdpProtection } from "./RdpProtection";
 import { EnrollmentPanel, Provisioning, startEnrollment } from "./EnrollmentPanel";
 import { api } from "../lib/api";
 
-type AccountState = "not_enrolled" | "pending" | "enrolled" | "mfa_inactive" | "disabled_account";
+type AccountState = "not_enrolled" | "pending" | "enrolled" | "mfa_inactive" | "disabled_account" | "recovery_account";
 
 type WindowsAccount = {
   username: string;
@@ -23,6 +23,7 @@ type WindowsAccount = {
 function stateLabel(account: WindowsAccount): { text: string; pill: string } {
   switch (account.state) {
     case "disabled_account": return { text: "Disabled account", pill: "disabled" };
+    case "recovery_account": return { text: "Recovery account · never asked for a code", pill: "active" };
     case "not_enrolled": return { text: "Not enrolled", pill: "disabled" };
     case "pending": return { text: "Enrollment pending", pill: "pending" };
     case "enrolled": return account.mfa_status === "locked"

@@ -449,14 +449,18 @@ def list_windows_users(
     """Local Windows accounts matched to MFA records (read-only)."""
     accounts = read_local_windows_accounts()
     records = {user.username.casefold(): user for user in db.scalars(select(MfaUser))}
+    recovery = recovery_account_or_none()
     rows = []
     for account in accounts:
         record = records.get(str(account["username"]).casefold())
+        state = windows_account_state(bool(account["enabled"]), record.status if record else None)
+        if recovery and str(account["username"]).casefold() == recovery.casefold():
+            state = "recovery_account"  # always excluded from MFA; never enrolled, never uses a seat
         rows.append({
             **account,
             "mfa_user_id": record.id if record else None,
             "mfa_status": record.status.value if record else None,
-            "state": windows_account_state(bool(account["enabled"]), record.status if record else None),
+            "state": state,
         })
     return rows
 
