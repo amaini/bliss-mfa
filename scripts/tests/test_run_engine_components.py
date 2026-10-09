@@ -1,6 +1,7 @@
 """The real engine wiring: which processes form the authentication core."""
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -58,7 +59,9 @@ def test_authentication_core_receives_no_licensing_or_management_secrets(tmp_pat
     repo, config = engine(tmp_path)
     for component in run_engine.components(config, repo=repo):
         if component.critical:
-            leaked = [k for k in component.env if k.startswith(COMMERCIAL_SECRETS)]
+            # Variables inherited from the host (e.g. a CI runner's AGENT_TOOLSDIRECTORY) are not added by
+            # the launcher; only values it sets for the component can leak licensing or management secrets.
+            leaked = [k for k in component.env if k.startswith(COMMERCIAL_SECRETS) and k not in os.environ]
             assert leaked == [], component.name
 
 
