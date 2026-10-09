@@ -177,3 +177,10 @@ def test_periodic_coverage_does_nothing_when_off(env, monkeypatch):
     monkeypatch.setattr(db, "close", lambda: None)
     main.periodic_coverage()
     assert "ekta" not in engine.kind
+
+
+def test_recovery_account_is_labelled_and_not_offered_for_enrollment(env):
+    client, *_ = env
+    rows = {r["username"]: r for r in client.get("/v1/windows-users").json()}
+    assert rows["Abhishek"]["state"] == "recovery_account"
+    assert rows["Ekta"]["state"] == "not_enrolled"
