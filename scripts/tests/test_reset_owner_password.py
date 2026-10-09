@@ -13,12 +13,11 @@ spec = importlib.util.spec_from_file_location("reset_owner", REPO / "scripts" / 
 reset = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(reset)
 
-from sqlalchemy import create_engine, select  # noqa: E402
-from sqlalchemy.orm import Session  # noqa: E402
-
-from appliance.db import Base  # noqa: E402
-from appliance.models import AdminRole, AuditEvent, LocalAdmin  # noqa: E402
-from appliance.security import hash_password, verify_password  # noqa: E402
+from appliance.db import Base
+from appliance.models import AdminRole, AuditEvent, LocalAdmin
+from appliance.security import hash_password, verify_password
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session
 
 
 @pytest.fixture

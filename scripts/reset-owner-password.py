@@ -21,12 +21,11 @@ MIN_LENGTH = 12
 
 
 def reset_owner_password(database_file: Path, password: str) -> str:
-    from sqlalchemy import create_engine, select
-    from sqlalchemy.orm import Session
-
     from appliance.audit import write_audit
     from appliance.models import AdminRole, LocalAdmin
     from appliance.security import hash_password
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import Session
 
     if len(password) < MIN_LENGTH:
         raise ValueError(f"Use at least {MIN_LENGTH} characters")
