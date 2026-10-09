@@ -55,6 +55,7 @@ def test_package_from_separate_checkout_preserves_existing_release(packaging):
         names = archive.namelist()
         assert "bliss-mfa/apps/appliance-api/appliance/migrate.py" in names
         assert "bliss-mfa/deployment/update-public.pem" in names
+        assert "bliss-mfa/scripts/reset-owner-password.py" in names  # owner password recovery ships
         # run-engine.py imports the isolating supervisor; a release without it cannot start.
         assert "bliss-mfa/scripts/engine_supervisor.py" in names
         # The reinstall path runs this step from the verified release.

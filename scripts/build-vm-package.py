@@ -111,7 +111,7 @@ with zipfile.ZipFile(OUTPUT, 'x', compression=zipfile.ZIP_DEFLATED) as archive:
                      'scripts/appliance-runtime.py', 'scripts/Install-BlissEngine.ps1',
                      'scripts/Patch-ProviderHttpFraming.ps1', 'scripts/verify-native-cgi.py',
                      'scripts/Stage-BlissProvider.ps1', 'scripts/Enable-RdpProtection.ps1',
-                     'scripts/provider-readiness.py']
+                     'scripts/provider-readiness.py', 'scripts/reset-owner-password.py']
     if not args.appliance:
         sources += [
                      'scripts/verify-vm-engine.py', 'scripts/verify-vm-runtime.py',
